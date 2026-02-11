@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@objective-tracker/shared": "workspace:*",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^12.34.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0"

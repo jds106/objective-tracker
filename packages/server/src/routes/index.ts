@@ -6,11 +6,13 @@ import type { ObjectiveService } from '../services/objective.service.js';
 import type { KeyResultService } from '../services/key-result.service.js';
 import type { CheckInService } from '../services/check-in.service.js';
 import type { CycleService } from '../services/cycle.service.js';
+import type { CascadeService } from '../services/cascade.service.js';
 import { createAuthRoutes } from './auth.routes.js';
 import { createUserRoutes } from './user.routes.js';
 import { createObjectiveRoutes } from './objective.routes.js';
 import { createKeyResultRoutes } from './key-result.routes.js';
 import { createCycleRoutes } from './cycle.routes.js';
+import { createCascadeRoutes } from './cascade.routes.js';
 
 export interface RouteDependencies {
   authProvider: AuthProvider;
@@ -21,6 +23,7 @@ export interface RouteDependencies {
   keyResultService: KeyResultService;
   checkInService: CheckInService;
   cycleService: CycleService;
+  cascadeService: CascadeService;
 }
 
 export function createRoutes(deps: RouteDependencies): Router {
@@ -31,6 +34,7 @@ export function createRoutes(deps: RouteDependencies): Router {
   router.use('/objectives', createObjectiveRoutes(deps));
   router.use('/', createKeyResultRoutes(deps));
   router.use('/cycles', createCycleRoutes(deps));
+  router.use('/cascade', createCascadeRoutes(deps));
 
   return router;
 }

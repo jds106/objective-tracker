@@ -11,6 +11,12 @@ export default {
           raised: '#1e293b',
           overlay: '#334155',
         },
+        health: {
+          'on-track': '#10b981',
+          'at-risk': '#f59e0b',
+          behind: '#ef4444',
+          'not-started': '#64748b',
+        },
       },
     },
   },

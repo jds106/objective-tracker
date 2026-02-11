@@ -48,5 +48,21 @@ export function createUserRoutes(deps: RouteDependencies): Router {
     }
   });
 
+  router.get('/:id/objectives', auth, async (req, res, next) => {
+    try {
+      const canView = await deps.visibilityService.canView(req.user!.id, req.params.id);
+      if (!canView) {
+        res.status(403).json({ error: 'You do not have visibility to this user' });
+        return;
+      }
+
+      const cycleId = req.query.cycleId as string | undefined;
+      const objectives = await deps.objectiveService.getByUserId(req.params.id, cycleId);
+      res.json({ data: objectives });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }

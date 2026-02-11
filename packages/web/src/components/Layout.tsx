@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/auth.context.js';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard' },
+  { path: '/cascade', label: 'Cascade' },
 ];
 
 export function Layout() {

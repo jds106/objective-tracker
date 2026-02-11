@@ -15,6 +15,7 @@ import {
   KeyResultService,
   CheckInService,
   CycleService,
+  CascadeService,
 } from './services/index.js';
 import { createRoutes } from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.middleware.js';
@@ -48,6 +49,7 @@ export async function createApp(config: Config): Promise<Express> {
   const keyResultService = new KeyResultService(keyResultRepo, objectiveRepo);
   const checkInService = new CheckInService(keyResultRepo);
   const cycleService = new CycleService(cycleRepo);
+  const cascadeService = new CascadeService(userRepo, objectiveRepo);
 
   // Mount routes
   const routes = createRoutes({
@@ -59,6 +61,7 @@ export async function createApp(config: Config): Promise<Express> {
     keyResultService,
     checkInService,
     cycleService,
+    cascadeService,
   });
 
   app.use('/api', routes);

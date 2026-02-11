@@ -4,3 +4,5 @@ export { ObjectiveService } from './objective.service.js';
 export { KeyResultService } from './key-result.service.js';
 export { CheckInService } from './check-in.service.js';
 export { CycleService } from './cycle.service.js';
+export { CascadeService } from './cascade.service.js';
+export type { CascadeNode } from './cascade.service.js';

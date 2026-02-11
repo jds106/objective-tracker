@@ -71,5 +71,14 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
     }
   });
 
+  router.get('/:id/cascade', auth, async (req, res, next) => {
+    try {
+      const path = await deps.cascadeService.getCascadePath(req.params.id, req.user!.id);
+      res.json({ data: path });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }
