@@ -68,7 +68,31 @@ export class JsonObjectiveRepository implements ObjectiveRepository {
       updatedAt: now,
     };
 
-    const file = await this.userRepo.readUserFile(input.ownerId);
+    let file = await this.userRepo.readUserFile(input.ownerId);
+
+    // Auto-create a pseudo-user file for company-level objectives
+    if (!file && input.ownerId === 'company') {
+      const companyFile: UserFile = {
+        version: 1,
+        user: {
+          id: 'company',
+          email: 'company@system',
+          displayName: 'Company',
+          jobTitle: '',
+          managerId: null,
+          level: 0,
+          department: '',
+          role: 'standard',
+          passwordHash: '',
+          createdAt: nowISO(),
+          updatedAt: nowISO(),
+        },
+        objectives: [],
+      };
+      await writeJsonFile(join(this.dataDir, 'users', 'company.json'), companyFile);
+      file = companyFile;
+    }
+
     if (!file) throw new NotFoundError('User not found');
 
     const updatedFile: UserFile = {

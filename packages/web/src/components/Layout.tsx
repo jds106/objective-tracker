@@ -1,14 +1,18 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/auth.context.js';
 
-const navItems = [
+const baseNavItems = [
   { path: '/dashboard', label: 'Dashboard' },
   { path: '/cascade', label: 'Cascade' },
 ];
 
 export function Layout() {
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
   const location = useLocation();
+
+  const navItems = isAdmin
+    ? [...baseNavItems, { path: '/admin', label: 'Admin' }]
+    : baseNavItems;
 
   return (
     <div className="flex min-h-screen">
@@ -23,11 +27,10 @@ export function Layout() {
             <Link
               key={item.path}
               to={item.path}
-              className={`block px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname === item.path
+              className={`block px-4 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === item.path
                   ? 'bg-indigo-500/20 text-indigo-300'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
-              }`}
+                }`}
             >
               {item.label}
             </Link>

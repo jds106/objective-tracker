@@ -7,7 +7,7 @@ import {
   JsonKeyResultRepository,
   JsonCycleRepository,
 } from './repositories/index.js';
-import { JwtService, TokenBlacklist, PasswordAuthProvider } from './auth/index.js';
+import { JwtService, TokenBlacklist, PasswordAuthProvider, PasswordResetService } from './auth/index.js';
 import {
   VisibilityService,
   UserService,
@@ -17,6 +17,7 @@ import {
   CycleService,
   CascadeService,
 } from './services/index.js';
+import { ConsoleNotificationService } from './services/index.js';
 import { createRoutes } from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.middleware.js';
 
@@ -50,6 +51,8 @@ export async function createApp(config: Config): Promise<Express> {
   const checkInService = new CheckInService(keyResultRepo);
   const cycleService = new CycleService(cycleRepo);
   const cascadeService = new CascadeService(userRepo, objectiveRepo);
+  const notificationService = new ConsoleNotificationService();
+  const passwordResetService = new PasswordResetService(userRepo, notificationService);
 
   // Mount routes
   const routes = createRoutes({
@@ -62,6 +65,7 @@ export async function createApp(config: Config): Promise<Express> {
     checkInService,
     cycleService,
     cascadeService,
+    passwordResetService,
   });
 
   app.use('/api', routes);

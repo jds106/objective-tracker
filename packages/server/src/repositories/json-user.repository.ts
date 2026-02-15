@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { unlink } from 'node:fs/promises';
 import type {
   UserRepository,
   CreateUserInput,
@@ -6,6 +7,7 @@ import type {
   User,
   UserWithPassword,
   UserFile,
+  UserRole,
 } from '@objective-tracker/shared';
 import { NotFoundError, ConcurrencyError, generateId, nowISO } from '@objective-tracker/shared';
 import { readJsonFile, writeJsonFile, withWriteLock, ensureDir } from './file-helpers.js';
@@ -22,6 +24,7 @@ interface OrgIndexEntry {
   managerId: string | null;
   level: number;
   department?: string;
+  role?: UserRole;
 }
 
 export class JsonUserRepository implements UserRepository {
@@ -113,6 +116,7 @@ export class JsonUserRepository implements UserRepository {
       managerId: input.managerId,
       level: input.level,
       department: input.department,
+      role: input.role ?? 'standard',
       passwordHash: input.passwordHash,
       createdAt: now,
       updatedAt: now,
@@ -152,6 +156,43 @@ export class JsonUserRepository implements UserRepository {
       await this.updateOrgIndex(updatedUser);
 
       return stripPassword(updatedUser);
+    });
+  }
+
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    return withWriteLock(this.userFilePath(id), async () => {
+      const file = await this.readUserFile(id);
+      if (!file) throw new NotFoundError('User not found');
+
+      const now = nowISO();
+      const updatedUser: UserWithPassword = {
+        ...file.user,
+        passwordHash,
+        updatedAt: now,
+      };
+
+      const updatedFile: UserFile = {
+        ...file,
+        version: file.version + 1,
+        user: updatedUser,
+      };
+
+      await writeJsonFile(this.userFilePath(id), updatedFile);
+    });
+  }
+
+  async delete(id: string): Promise<void> {
+    const file = await this.readUserFile(id);
+    if (!file) throw new NotFoundError('User not found');
+
+    // Remove user file
+    await unlink(this.userFilePath(id));
+
+    // Remove from org index
+    await withWriteLock(this.orgPath, async () => {
+      const org = await this.readOrgIndex();
+      org.users = org.users.filter(u => u.id !== id);
+      await writeJsonFile(this.orgPath, org);
     });
   }
 
@@ -208,6 +249,7 @@ function toOrgEntry(user: UserWithPassword | User): OrgIndexEntry {
     managerId: user.managerId,
     level: user.level,
     department: user.department,
+    role: user.role,
   };
 }
 
@@ -220,6 +262,7 @@ function stripOrgEntry(entry: OrgIndexEntry): User {
     managerId: entry.managerId,
     level: entry.level,
     department: entry.department,
+    role: entry.role ?? 'standard',
     createdAt: '',
     updatedAt: '',
   };

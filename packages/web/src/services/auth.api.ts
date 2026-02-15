@@ -26,3 +26,20 @@ export function logout(): Promise<void> {
 export function getMe(): Promise<ApiResponse<User>> {
   return apiClient.get('/users/me');
 }
+
+export interface ForgotPasswordResponse {
+  message: string;
+  resetToken?: string;
+}
+
+export function forgotPassword(email: string): Promise<ApiResponse<ForgotPasswordResponse>> {
+  return apiClient.post('/auth/forgot-password', { email });
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+}
+
+export function resetPassword(token: string, password: string): Promise<ApiResponse<ResetPasswordResponse>> {
+  return apiClient.post('/auth/reset-password', { token, password });
+}

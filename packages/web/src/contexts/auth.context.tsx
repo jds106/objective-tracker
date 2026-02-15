@@ -7,6 +7,7 @@ import type { RegisterFormData } from '../services/auth.api.js';
 interface AuthContextValue {
   user: User | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (input: RegisterFormData) => Promise<void>;
@@ -68,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user,
       isAuthenticated: !!user,
+      isAdmin: user?.role === 'admin',
       isLoading,
       login,
       register,

@@ -1,5 +1,7 @@
 import type { Objective } from './objective.js';
 
+export type UserRole = 'admin' | 'standard';
+
 export interface User {
   id: string;
   email: string;
@@ -8,6 +10,7 @@ export interface User {
   managerId: string | null;
   level: number;
   department?: string;
+  role: UserRole;
   createdAt: string;
   updatedAt: string;
 }

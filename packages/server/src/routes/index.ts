@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { AuthProvider, UserRepository } from '@objective-tracker/shared';
+import type { PasswordResetService } from '../auth/password-reset.service.js';
 import type { VisibilityService } from '../services/visibility.service.js';
 import type { UserService } from '../services/user.service.js';
 import type { ObjectiveService } from '../services/objective.service.js';
@@ -13,6 +14,7 @@ import { createObjectiveRoutes } from './objective.routes.js';
 import { createKeyResultRoutes } from './key-result.routes.js';
 import { createCycleRoutes } from './cycle.routes.js';
 import { createCascadeRoutes } from './cascade.routes.js';
+import { createAdminRoutes } from './admin.routes.js';
 
 export interface RouteDependencies {
   authProvider: AuthProvider;
@@ -24,6 +26,7 @@ export interface RouteDependencies {
   checkInService: CheckInService;
   cycleService: CycleService;
   cascadeService: CascadeService;
+  passwordResetService: PasswordResetService;
 }
 
 export function createRoutes(deps: RouteDependencies): Router {
@@ -35,6 +38,7 @@ export function createRoutes(deps: RouteDependencies): Router {
   router.use('/', createKeyResultRoutes(deps));
   router.use('/cycles', createCycleRoutes(deps));
   router.use('/cascade', createCascadeRoutes(deps));
+  router.use('/admin', createAdminRoutes(deps));
 
   return router;
 }

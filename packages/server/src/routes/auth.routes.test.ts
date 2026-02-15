@@ -126,4 +126,115 @@ describe('Auth Routes', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(401);
   });
+
+  describe('Forgot/Reset Password', () => {
+    it('should return a reset token for a valid email', async () => {
+      await request(app).post('/api/auth/register').send(testUser);
+
+      const res = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: testUser.email })
+        .expect(200);
+
+      expect(res.body.data.message).toBeDefined();
+      expect(res.body.data.resetToken).toBeDefined();
+    });
+
+    it('should return 200 for unknown email (no user enumeration)', async () => {
+      const res = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'nobody@example.com' })
+        .expect(200);
+
+      expect(res.body.data.message).toBeDefined();
+      expect(res.body.data.resetToken).toBeUndefined();
+    });
+
+    it('should reject forgot-password with invalid email format', async () => {
+      await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'not-an-email' })
+        .expect(400);
+    });
+
+    it('should reset password with a valid token', async () => {
+      await request(app).post('/api/auth/register').send(testUser);
+
+      const forgotRes = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: testUser.email });
+      const { resetToken } = forgotRes.body.data;
+
+      const res = await request(app)
+        .post('/api/auth/reset-password')
+        .send({ token: resetToken, password: 'newpassword123' })
+        .expect(200);
+
+      expect(res.body.data.message).toContain('successfully');
+    });
+
+    it('should login with new password after reset', async () => {
+      await request(app).post('/api/auth/register').send(testUser);
+
+      const forgotRes = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: testUser.email });
+
+      await request(app)
+        .post('/api/auth/reset-password')
+        .send({ token: forgotRes.body.data.resetToken, password: 'newpassword123' });
+
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ email: testUser.email, password: 'newpassword123' })
+        .expect(200);
+
+      expect(loginRes.body.data.token).toBeDefined();
+    });
+
+    it('should reject login with old password after reset', async () => {
+      await request(app).post('/api/auth/register').send(testUser);
+
+      const forgotRes = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: testUser.email });
+
+      await request(app)
+        .post('/api/auth/reset-password')
+        .send({ token: forgotRes.body.data.resetToken, password: 'newpassword123' });
+
+      await request(app)
+        .post('/api/auth/login')
+        .send({ email: testUser.email, password: testUser.password })
+        .expect(401);
+    });
+
+    it('should reject reset with invalid token', async () => {
+      await request(app)
+        .post('/api/auth/reset-password')
+        .send({ token: 'invalid-token', password: 'newpassword123' })
+        .expect(400);
+    });
+
+    it('should reject reuse of a consumed reset token', async () => {
+      await request(app).post('/api/auth/register').send(testUser);
+
+      const forgotRes = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: testUser.email });
+      const { resetToken } = forgotRes.body.data;
+
+      // First use — should succeed
+      await request(app)
+        .post('/api/auth/reset-password')
+        .send({ token: resetToken, password: 'newpassword123' })
+        .expect(200);
+
+      // Second use — should fail
+      await request(app)
+        .post('/api/auth/reset-password')
+        .send({ token: resetToken, password: 'anotherpassword1' })
+        .expect(400);
+    });
+  });
 });

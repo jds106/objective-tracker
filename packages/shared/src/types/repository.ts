@@ -1,4 +1,4 @@
-import type { User, UserWithPassword } from './user.js';
+import type { User, UserWithPassword, UserRole } from './user.js';
 import type { Objective, ObjectiveStatus } from './objective.js';
 import type { KeyResult, KeyResultType, KeyResultConfig } from './key-result.js';
 import type { CheckIn } from './check-in.js';
@@ -11,6 +11,7 @@ export interface CreateUserInput {
   managerId: string | null;
   level: number;
   department?: string;
+  role?: UserRole;
   passwordHash: string;
 }
 
@@ -20,6 +21,7 @@ export interface UpdateUserInput {
   managerId?: string | null;
   level?: number;
   department?: string;
+  role?: UserRole;
 }
 
 export interface UserRepository {
@@ -31,6 +33,8 @@ export interface UserRepository {
   getDownwardTree(userId: string): Promise<User[]>;
   create(input: CreateUserInput): Promise<User>;
   update(id: string, updates: UpdateUserInput): Promise<User>;
+  updatePassword(id: string, passwordHash: string): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 export interface CreateObjectiveInput {

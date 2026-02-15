@@ -1,4 +1,4 @@
-export type { User, UserWithPassword, UserFile } from './user.js';
+export type { User, UserWithPassword, UserFile, UserRole } from './user.js';
 export type { Objective, ObjectiveStatus } from './objective.js';
 export type {
   KeyResult,
