@@ -48,16 +48,43 @@ interface AuthProvider {
 }
 ```
 
+**User Roles**:
+
+There are two roles, stored as a `role` field on the User entity:
+
+| Role | Description |
+|------|-------------|
+| `admin` | Full system access — can see all users, manage the org, create company objectives, and modify any objective. Intended for a small number of system operators. |
+| `standard` | Normal user — subject to vertical visibility and edit rules described below. |
+
+**Role assignment**:
+
+- The **first user** to register is automatically assigned the `admin` role. This bootstraps the system without requiring a separate setup step.
+- All subsequent users register as `standard` by default.
+- An admin can promote any user to `admin` or demote them back to `standard` via the admin panel or API (`PUT /api/admin/users/:id`).
+- Role cannot be self-assigned — only an existing admin can change roles.
+
 **Authorisation rules**:
 
-- **Visibility**: Vertical only. A user can see objectives for:
+Standard users:
+
+- **Visibility**: Vertical only. A standard user can see objectives for:
   - Themselves
   - Anyone in their direct reporting chain upward (their manager, their manager's manager, etc. up to CTO)
   - Anyone in their reporting tree downward (their reports, their reports' reports, etc.)
   - They **cannot** see objectives for peers in other groups/teams at the same level
-- **Editing**: A user can edit:
+- **Editing**: A standard user can edit:
   - Their own objectives
   - The objectives of anyone in their downward reporting tree (managers can edit down)
+
+Admin users:
+
+- **Visibility**: Admins can see **all users** and **all objectives** regardless of reporting chain.
+- **Editing**: Admins can edit **any user's objectives** and modify user records (role, department, manager assignment).
+- **User management**: Admins can list, update, and delete users. An admin cannot delete themselves.
+- **Company objectives**: Only admins can create root-level company objectives (objectives with no owner in the org hierarchy, representing top-level strategic goals).
+- **Password resets**: Admins can trigger a password reset for any user, generating a temporary password.
+- **Cycle management**: Only admins can create and manage objective cycles.
 
 ---
 
@@ -75,6 +102,8 @@ interface AuthProvider {
 #### User
 
 ```typescript
+type UserRole = 'admin' | 'standard';
+
 interface User {
   id: string;                    // UUID
   email: string;
@@ -83,6 +112,7 @@ interface User {
   managerId: string | null;      // null for CTO / top-level
   level: number;                 // 1 = CTO, 2 = Group Head, etc.
   department?: string;
+  role: UserRole;                // 'admin' or 'standard' (see §2.3)
   createdAt: string;             // ISO 8601
   updatedAt: string;
 }
@@ -328,12 +358,13 @@ For managers, a view of their direct reports' objectives:
 
 #### 5.3.6 Admin Panel
 
-For system administrators:
+Accessible only to users with `role: 'admin'` (see §2.3). The admin panel provides:
 
-- Workday CSV import
-- Cycle management (create/edit annual cycles and quarters)
-- Org structure management (manual adjustments)
-- User management
+- **User management**: List all users, search, update role/department/manager, delete users, trigger password resets
+- **Company objectives**: Create and manage root-level company objectives that sit at the top of the cascade
+- **Cycle management**: Create/edit annual cycles and quarters
+- **Org structure management**: Manual adjustments to reporting lines
+- **Workday CSV import**: Upload and map columns to build the org tree
 
 #### 5.3.7 AI Assistant Panel
 
@@ -540,8 +571,11 @@ objective-tracker/
 ### 10.1 REST API Endpoints
 
 **Auth**
+- `POST /api/auth/register` — Create account (first user becomes admin, subsequent users are standard)
 - `POST /api/auth/login` — Authenticate and receive JWT
 - `POST /api/auth/logout` — Revoke token
+- `POST /api/auth/forgot-password` — Request a password reset token (generic response to prevent user enumeration)
+- `POST /api/auth/reset-password` — Reset password using a one-time token
 
 **Users**
 - `GET /api/users/me` — Current user profile
@@ -578,10 +612,15 @@ objective-tracker/
 - `POST /api/ai/suggest` — Suggest objectives given a parent
 - `POST /api/ai/summarise` — Generate cycle/review summary
 
-**Admin**
+**Admin** (all endpoints require `role: 'admin'`)
+- `GET /api/admin/users` — List all users
+- `PUT /api/admin/users/:id` — Update user (role, department, manager, job title)
+- `DELETE /api/admin/users/:id` — Delete user (cannot self-delete)
+- `POST /api/admin/users/:id/reset-password` — Generate temporary password for user
+- `GET /api/admin/objectives` — List all objectives org-wide
+- `POST /api/admin/objectives/company` — Create a root-level company objective
 - `POST /api/admin/import/workday` — Upload and process Workday CSV
 - `GET /api/admin/org` — Full org tree
-- `PUT /api/admin/org/users/:id` — Update user org placement
 
 ---
 

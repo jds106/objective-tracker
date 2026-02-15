@@ -6,6 +6,8 @@ Objective Tracker is an internal OKR-style objective management application that
 
 Full specification: `docs/spec.md` — read this first for complete context.
 
+**Spec Sync Requirement**: `docs/spec.md` is the single source of truth for application behaviour. Whenever a feature is added, changed, or removed in code, the spec must be updated in the same change to reflect the new state. This includes: new API endpoints, changes to data models, new UI views, modified authorisation rules, and any behavioural changes. The spec should always accurately describe what the application does — never let code and spec drift apart.
+
 ## Tech Stack
 
 - **Language**: TypeScript throughout (strict mode, no `any`)
