@@ -1247,9 +1247,23 @@ function CyclesTab() {
     const [showCreate, setShowCreate] = useState(false);
     const [error, setError] = useState('');
     const [creating, setCreating] = useState(false);
+    const [transitioning, setTransitioning] = useState<string | null>(null);
 
     // Sync with context when it updates
     useEffect(() => { setCycles(allCycles); }, [allCycles]);
+
+    const handleStatusTransition = async (cycleId: string, newStatus: CycleStatus) => {
+        setTransitioning(cycleId);
+        setError('');
+        try {
+            const { data } = await adminApi.updateCycle(cycleId, { status: newStatus });
+            setCycles(prev => prev.map(c => c.id === cycleId ? data : c));
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to update cycle status'));
+        } finally {
+            setTransitioning(null);
+        }
+    };
 
     // Form state
     const [name, setName] = useState('');
@@ -1376,6 +1390,40 @@ function CyclesTab() {
                                             </div>
                                         );
                                     })}
+                                </div>
+                            )}
+
+                            {/* Status transition buttons */}
+                            {cycle.status !== 'closed' && (
+                                <div className="mt-3 pt-3 border-t border-slate-700/50 flex items-center gap-2">
+                                    <span className="text-xs text-slate-500 mr-1">Transition:</span>
+                                    {cycle.status === 'planning' && (
+                                        <button
+                                            onClick={() => handleStatusTransition(cycle.id, 'active')}
+                                            disabled={!!transitioning}
+                                            className="rounded-lg bg-emerald-600/20 border border-emerald-500/30 px-3 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors disabled:opacity-50"
+                                        >
+                                            {transitioning === cycle.id ? 'Activating...' : 'Activate Cycle'}
+                                        </button>
+                                    )}
+                                    {cycle.status === 'active' && (
+                                        <button
+                                            onClick={() => handleStatusTransition(cycle.id, 'review')}
+                                            disabled={!!transitioning}
+                                            className="rounded-lg bg-amber-600/20 border border-amber-500/30 px-3 py-1 text-xs font-medium text-amber-400 hover:bg-amber-600/30 transition-colors disabled:opacity-50"
+                                        >
+                                            {transitioning === cycle.id ? 'Moving...' : 'Move to Review'}
+                                        </button>
+                                    )}
+                                    {cycle.status === 'review' && (
+                                        <button
+                                            onClick={() => handleStatusTransition(cycle.id, 'closed')}
+                                            disabled={!!transitioning}
+                                            className="rounded-lg bg-slate-600/20 border border-slate-500/30 px-3 py-1 text-xs font-medium text-slate-400 hover:bg-slate-600/30 transition-colors disabled:opacity-50"
+                                        >
+                                            {transitioning === cycle.id ? 'Closing...' : 'Close Cycle'}
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>

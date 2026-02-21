@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CheckIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import type { KeyResult, KeyResultConfig } from '@objective-tracker/shared';
 import { calculateProgress } from '@objective-tracker/shared';
 import { KeyResultConfigForm } from '../key-results/KeyResultConfigForm.js';
@@ -123,17 +124,13 @@ export function BulkCheckInKRCard({
       {/* Post-submit indicator */}
       {result === 'success' && (
         <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
+          <CheckIcon className="h-4 w-4" />
           Check-in recorded
         </div>
       )}
       {result === 'error' && (
         <div className="mt-2 flex items-center gap-1.5 text-xs text-red-400">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
+          <ExclamationCircleIcon className="h-4 w-4" />
           {error ?? 'Check-in failed'}
         </div>
       )}

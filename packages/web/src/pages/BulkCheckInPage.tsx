@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { CheckCircleIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/auth.context.js';
 import { useCycle } from '../contexts/cycle.context.js';
 import { useObjectives } from '../hooks/useObjectives.js';
@@ -76,9 +77,7 @@ export function BulkCheckInPage() {
       {eligibleObjectives.length === 0 && !error && (
         <EmptyState
           icon={
-            <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <CheckCircleIcon className="h-12 w-12" />
           }
           title="Nothing to check in on"
           description="You have no active objectives with key results. Create some objectives first, then come back here."
