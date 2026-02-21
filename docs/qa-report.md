@@ -5,7 +5,7 @@
 **Spec Ref**: `docs/spec.md` v1.0
 **Phase**: End of Phase 2 (Core Experience)
 **Total Issues**: 84 (83 active, 1 retracted)
-**Fixed**: 46 issues resolved across three fix rounds
+**Fixed**: 54 issues resolved across four fix rounds
 
 ---
 
@@ -69,12 +69,24 @@
 | BUG-078 | ✅ Fixed — Admin objectives fetch uses Promise.all for parallel reads |
 | BUG-080 | ✅ Resolved — allCycles now consumed by rollforward feature |
 
-### Remaining Open Issues (37)
+### Round 4 — Cosmetic Bugs (8/8 fixed)
+| Bug | Status |
+|-----|--------|
+| BUG-067 | ✅ Fixed — Cycle context surfaces errors when both API calls fail |
+| BUG-068 | ✅ Fixed — admin.api.ts imports shared ApiResponse instead of local duplicate |
+| BUG-079 | ✅ Already resolved — unused `calculateProgress` import no longer present |
+| BUG-081 | ✅ Fixed — `fetch` renamed to `loadObjectives`/`loadObjective`/`loadTree` in 3 hooks |
+| BUG-082 | ✅ Fixed — Admin ObjectiveRow uses shared ProgressRing component |
+| BUG-083 | ✅ Fixed — Unused useCallback import removed from CascadeTree.tsx |
+| BUG-084 | ✅ Fixed — `<meta name="description">` and `<noscript>` added to index.html |
+| BUG-085 | ✅ Fixed — Unreachable `.catch()` on `Promise.allSettled` removed from useTeamData |
+
+### Remaining Open Issues (29)
 | Severity | Count | Notes |
 |----------|-------|-------|
 | MAJOR | 16 | Mostly Phase 3+ features (AI, network graph, light mode) and spec gaps |
 | MINOR | 10 | Safari workaround, spec drift docs, registration UX |
-| COSMETIC | 8 | Code quality, unused imports |
+| COSMETIC | 2 | BUG-028 (Upcoming Check-ins — Phase 3), BUG-029 (AI Nudges — Phase 3) |
 | RETRACTED | 1 | BUG-038 |
 
 ---
@@ -885,9 +897,9 @@ The HTML document lacks a `<meta name="description">` tag for SEO/accessibility 
 | CRITICAL | 3 | 3 | 0 |
 | MAJOR | 33 | 21 | 12 |
 | MINOR | 32 | 23 | 9 |
-| COSMETIC | 15 | 0 | 15 |
+| COSMETIC | 15 | 8 | 7 |
 | RETRACTED | 1 | — | — |
-| **Total** | **84** | **47** | **36** open |
+| **Total** | **84** | **55** | **28** open |
 
 ## Remaining Priority Items
 
@@ -912,7 +924,7 @@ The HTML document lacks a `<meta name="description">` tag for SEO/accessibility 
 - **BUG-060**: Network Graph View (Phase 3)
 - **BUG-061**: AI Assistant Panel (Phase 3)
 
-### Minor/cosmetic still open
+### Minor still open
 
 - **BUG-024**: Cascade filter aria-labels (already present — verify Select component forwards them)
 - **BUG-025**: Safari foreignObject issues (platform limitation)
@@ -921,8 +933,12 @@ The HTML document lacks a `<meta name="description">` tag for SEO/accessibility 
 - **BUG-048**: UserFile.user type spec drift
 - **BUG-056–059**: Spec documentation of undocumented endpoints
 - **BUG-065**: Registration form missing managerId/level fields
-- **BUG-067–068, 079, 081–085**: Cosmetic/code quality issues
+
+### Cosmetic still open
+
+- **BUG-028**: Upcoming Check-ins section (Phase 3)
+- **BUG-029**: AI Nudges section (Phase 3)
 
 ---
 
-*Report generated 2026-02-21. Updated with three rounds of fixes (critical, major, minor). 47 of 84 issues resolved. 283 tests passing, TypeScript clean. All issues verified against spec v1.0 and current codebase on `main` branch.*
+*Report generated 2026-02-21. Updated with four rounds of fixes (critical, major, minor, cosmetic). 55 of 84 issues resolved. 298 tests passing. All issues verified against spec v1.0 and current codebase on `main` branch.*
