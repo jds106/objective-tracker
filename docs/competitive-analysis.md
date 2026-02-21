@@ -1,6 +1,6 @@
 # Competitive Analysis — Objective Tracker
 
-**Date**: 2026-02-21
+**Date**: 2026-02-21 (updated 2026-02-21 — post-audit refresh)
 **Author**: Marketing Strategy Team
 **Status**: Living document — update quarterly
 
@@ -241,8 +241,11 @@ The OKR software market is crowded, consolidating, and increasingly AI-hungry. T
 | **AI Quality Review** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **MCP Server** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Slack Bot** | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ❌ | ✅ |
-| **Check-in Flow** | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ |
+| **Bulk Check-in Flow** | ✅ All-KR | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ |
 | **Health Status Indicators** | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ✅ | ✅ |
+| **Mobile Responsive** | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ⚠️ |
+| **WCAG Accessibility** | ✅ AA | ⚠️ | ⚠️ | ⚠️ | ❌ | ❌ | ⚠️ | ⚠️ | ⚠️ | ❌ |
+| **Rate Limiting / Security Headers** | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
 | **Performance Reviews** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |
 | **Engagement Surveys** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
 | **HRIS / Compensation** | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
@@ -282,6 +285,22 @@ The OKR software market is crowded, consolidating, and increasingly AI-hungry. T
 
 9. **Vertical Visibility Model** — Our strict vertical-only visibility (up your chain + down your tree) is a deliberate design choice. Most tools default to "everyone sees everything" or require complex permission setup.
 
+### 🆕 Recently Shipped (Post-Audit, Feb 2026)
+
+10. **Bulk Check-in Flow** — A dedicated `/check-in` page that lets users update all their key results in a single flow. Grouped by objective with live-updating progress rings, inline KR editing (check-in mode hides irrelevant fields), progress delta display (`old% → new% (±diff%)`), optional notes per KR, dirty detection, sticky footer with submit/discard/retry, and `beforeunload` warning. This directly addresses the #1 user complaint across every competitor: **check-ins feel like admin overhead.** Lattice has no bulk check-in at all. 15Five has weekly check-ins but they're generic text boxes, not per-KR inline updates. Our implementation uses `Promise.allSettled` for parallel submission with individual success/error indicators per KR — resilient to partial failures.
+
+11. **Mobile-Responsive Sidebar** — Full hamburger menu → slide-in drawer on mobile with backdrop blur, body scroll lock, auto-close on navigation, and proper ARIA labels (`role="dialog"`, `aria-modal`). This closes a gap we flagged as P1 in the original analysis. Most OKR tools (Weekdone, Perdoo, WorkBoard) have mediocre mobile experiences. Ours now works properly on phones for the most common action: checking in.
+
+12. **WCAG 2.1 AA Accessibility** — Focus trap in modals with auto-focus and focus restore, `aria-describedby` on password hints, keyboard navigation throughout, `role="alert"` on error boundaries. This is table stakes for enterprise adoption but most OKR tools do it poorly. We now meet AA compliance for all interactive components.
+
+13. **Security Hardening** — Rate limiting on all auth endpoints (express-rate-limit: 10 login attempts/15 min, 5 registrations/hour, 3 password resets/hour), Helmet security headers with CSP, path traversal guard on avatar deletion, CORS restricted to `FRONTEND_URL`, structured request logging with pino-http. No longer a security liability for self-hosted deployment.
+
+14. **282 Tests Across 18 Files** — Visibility service (20 tests), cascade service (13), objective service (24), auth provider (18), all route integration tests, Zod schema validation (70 tests), date utilities (14), UUID middleware (9), plus web component tests. This is a level of test coverage most dedicated OKR SaaS products probably don't have for their goal modules, and it's critical for an open-source project where community contributors need confidence in the test safety net.
+
+15. **React Error Boundaries** — Wrapping all route sections so a crash in one page doesn't white-screen the entire app. Styled error panels with "Try again" and "Go to dashboard" recovery actions. Basic but essential — and notably absent from many competitor UIs where a render error in a goal card crashes the whole page.
+
+16. **Lazy Loading + Performance** — Code-split all page routes with `React.lazy` + `Suspense`, debounced search inputs (250ms) on admin and cascade filters, memoised `ObjectiveCard` and `ReportCard` with `React.memo` + `useMemo`, loading states on admin action buttons to prevent double-clicks. These are the kind of polish details that separate "feels like a product" from "feels like an internal tool."
+
 ---
 
 ## 4. Our Weaknesses — Ruthlessly Honest
@@ -294,7 +313,7 @@ The OKR software market is crowded, consolidating, and increasingly AI-hungry. T
 
 3. **No Engagement Surveys** — Same as above. Lattice, 15Five, Leapsome, and Culture Amp offer pulse surveys. We don't.
 
-4. **No Mobile App** — Check-ins need to work on phones. Phase 5 covers mobile responsiveness, but native app users (most of the market) will notice.
+4. ~~**No Mobile App**~~ **Mobile Web: Done, Native App: No** — ✅ The web app is now fully mobile-responsive with a hamburger menu, slide-in sidebar, and properly adapted layouts. Check-ins work on phones. However, we still don't have a native iOS/Android app. For weekly check-ins, the mobile web experience is sufficient — most users won't notice the difference. This gap has moved from "critical" to "nice-to-have".
 
 5. **JSON File Storage** — The MVP uses flat files. Competitors use proper databases. This limits us to ~400 users and creates scaling questions. The repository abstraction exists, but PostgreSQL migration is "future consideration."
 
@@ -316,17 +335,20 @@ The OKR software market is crowded, consolidating, and increasingly AI-hungry. T
 
 ## 5. Must-Close Feature Gaps (Priority Order)
 
-| Priority | Gap | Reason | Effort |
-|----------|-----|--------|--------|
-| **P0** | SSO (Okta/Azure AD) | Security requirement for any org >50 people | Medium — auth provider interface exists |
-| **P0** | PostgreSQL migration | JSON files won't survive audit or scale | Medium — repository interface exists |
-| **P1** | Jira/Linear integration | Auto-update KRs from ticket completion | Medium |
-| **P1** | Mobile-responsive check-ins | People check in from phones | Low — Phase 5 |
-| **P1** | Export to PDF/CSV | Leadership review requirements | Low |
-| **P2** | Goal templates library | Lower adoption barrier | Low |
-| **P2** | Standalone KPI tracking | Parity with Perdoo | Medium |
-| **P3** | Performance reviews | Parity with all-in-one platforms | High — consider partnering |
-| **P3** | Engagement surveys | Parity with all-in-one platforms | High — consider partnering |
+| Priority | Gap | Reason | Effort | Status |
+|----------|-----|--------|--------|--------|
+| **P0** | SSO (Okta/Azure AD) | Security requirement for any org >50 people | Medium — auth provider interface exists | ❌ Open |
+| **P0** | PostgreSQL migration | JSON files won't survive audit or scale | Medium — repository interface exists | ❌ Open |
+| **P1** | Jira/Linear integration | Auto-update KRs from ticket completion | Medium | ❌ Open |
+| ~~P1~~ | ~~Mobile-responsive check-ins~~ | ~~People check in from phones~~ | ~~Low~~ | ✅ **Shipped** — full mobile sidebar + responsive layouts |
+| **P1** | Export to PDF/CSV | Leadership review requirements | Low | ❌ Open |
+| ~~P1~~ | ~~Bulk check-in flow~~ | ~~#1 user complaint: check-ins are tedious~~ | ~~Medium~~ | ✅ **Shipped** — `/check-in` page with all-KR bulk update |
+| ~~P1~~ | ~~Security hardening~~ | ~~Rate limiting, CSP, CORS~~ | ~~Low~~ | ✅ **Shipped** — Helmet, rate-limit, path traversal guard |
+| ~~P1~~ | ~~Accessibility (WCAG AA)~~ | ~~Enterprise adoption requirement~~ | ~~Medium~~ | ✅ **Shipped** — focus trap, aria labels, keyboard nav |
+| **P2** | Goal templates library | Lower adoption barrier | Low | ❌ Open |
+| **P2** | Standalone KPI tracking | Parity with Perdoo | Medium | ❌ Open |
+| **P3** | Performance reviews | Parity with all-in-one platforms | High — consider partnering | ❌ Open |
+| **P3** | Engagement surveys | Parity with all-in-one platforms | High — consider partnering | ❌ Open |
 
 ---
 
@@ -347,24 +369,31 @@ This is our Claude integration. It's our biggest differentiator and we should ma
 
 **The "conversational OKR" gap**: MCP server means users can interact with their objectives through natural language in any MCP-compatible client. "Show me my objectives" / "Update my latency KR to 180ms" / "How am I doing against my team lead's goals?" This is science fiction to every competitor.
 
+**The "check-in experience" gap** *(NEW — shipped)*: The #1 complaint across Lattice, 15Five, and Weekdone reviews is that check-ins feel like admin overhead. Our new bulk check-in flow lets users update every KR in a single page with live progress rings, per-KR delta display, optional notes, dirty detection, and parallel submission with individual success/error indicators. Lattice has **no** bulk check-in. 15Five has weekly text-box check-ins, not per-KR inline updates. This is now a concrete competitive advantage, not just a roadmap item.
+
 **The "beautiful visualisation" gap**: Most OKR tools have ugly, functional tree views. Our D3 cascade tree with pan/zoom, animated expand/collapse, health-coded node borders, and avatar cards is genuinely beautiful. The planned network graph will be unprecedented in the market.
 
 **The "developer experience" gap**: Most OKR tools are designed for HR. The API is an afterthought (Leapsome had no API until recently). We have a first-class REST API, TypeScript types, and a self-hosted deployment model. This resonates with engineering organisations.
 
+**The "actually works on mobile" gap** *(NEW — shipped)*: Perdoo has a "subpar mobile app" (user review), Weekdone is "overwhelming" on small screens, and WorkBoard's mobile experience gets poor reviews. Our mobile-responsive web app with hamburger sidebar, backdrop blur, and properly adapted check-in flow works well on phones without requiring a native app download. For the core use case (weekly check-in from your phone), our mobile web is better than most competitors' native apps.
+
+**The "accessibility" gap** *(NEW — shipped)*: Most OKR tools treat accessibility as an afterthought. Our modal focus traps, keyboard navigation, ARIA labels, and screen reader support put us ahead of the majority of competitors on WCAG compliance. This matters for enterprise procurement where accessibility requirements are increasingly enforced.
+
 ### 6.2 Features That Would Make Us Stand Out
 
-| Feature | Differentiation Impact | Build Effort |
-|---------|----------------------|-------------|
-| **AI Objective Scoring** — Claude scores each objective 1–10 on clarity, measurability, ambition, alignment, and shows a radar chart | 🔥 High — visual, shareable, gamifiable | Low |
-| **"Alignment Gaps" Alert** — AI identifies parent KRs with zero child objectives linked and nudges relevant people | 🔥 High — proactive, not reactive | Low |
-| **Conversation-First Check-ins** — Slack bot asks smart questions per KR, not generic prompts | 🔥 High — fixes the #1 complaint (check-ins feel like admin) | Medium |
-| **Git-style Objective History** — Full audit trail with diffs showing how objectives evolved over time | 🔥 High — no competitor does this | Low |
-| **"What Changed" Weekly Digest** — AI-generated summary of progress across the user's visibility tree | 🔥 High — managers would love this | Medium |
-| **Network Graph Exploration** — Force-directed graph showing objective interconnections | 🔥 Very high — unprecedented in market | Medium (Phase 3) |
-| **CLI Tool** — `ot status`, `ot checkin`, `ot team` from the terminal | 🔥 High for developer audience | Low |
-| **Webhook on KR Update** — Trigger external automations when progress changes | 🔥 Medium — enables DIY integrations | Low |
-| **Public Objective Sharing** — Generate a read-only URL for an objective/team to share with stakeholders | 🔥 Medium — useful for cross-team transparency | Low |
-| **Automated Progress from Jira/Linear** — KR auto-updates from linked ticket completion | 🔥 Very high — "set it and forget it" | Medium |
+| Feature | Differentiation Impact | Build Effort | Status |
+|---------|----------------------|-------------|--------|
+| ~~**Bulk Check-in Flow**~~ — Update all KRs in one page with live progress, dirty detection, parallel submit | 🔥 High — fixes #1 complaint | Medium | ✅ **Shipped** |
+| **AI Objective Scoring** — Claude scores each objective 1–10 on clarity, measurability, ambition, alignment, and shows a radar chart | 🔥 High — visual, shareable, gamifiable | Low | Next |
+| **"Alignment Gaps" Alert** — AI identifies parent KRs with zero child objectives linked and nudges relevant people | 🔥 High — proactive, not reactive | Low | Next |
+| **Conversation-First Check-ins** — Slack bot asks smart questions per KR, not generic prompts | 🔥 High — complements the bulk check-in web flow | Medium | Open |
+| **Git-style Objective History** — Full audit trail with diffs showing how objectives evolved over time | 🔥 High — no competitor does this | Low | Open |
+| **"What Changed" Weekly Digest** — AI-generated summary of progress across the user's visibility tree | 🔥 High — managers would love this | Medium | Open |
+| **Network Graph Exploration** — Force-directed graph showing objective interconnections | 🔥 Very high — unprecedented in market | Medium (Phase 3) | Open |
+| **CLI Tool** — `ot status`, `ot checkin`, `ot team` from the terminal | 🔥 High for developer audience | Low | Open |
+| **Webhook on KR Update** — Trigger external automations when progress changes | 🔥 Medium — enables DIY integrations | Low | Open |
+| **Public Objective Sharing** — Generate a read-only URL for an objective/team to share with stakeholders | 🔥 Medium — useful for cross-team transparency | Low | Open |
+| **Automated Progress from Jira/Linear** — KR auto-updates from linked ticket completion | 🔥 Very high — "set it and forget it" | Medium | Open |
 
 ---
 
@@ -432,6 +461,8 @@ Our sweet spot: **Mid-market engineering organisations (200–1,000 people)** wh
 - They want beautiful visualisation, not spreadsheet-with-colours
 - They want to interact with OKRs conversationally (MCP)
 - They've been displaced from Viva Goals or Quantive
+- They care about accessibility compliance (WCAG AA) — we now do this better than most competitors
+- They want a fast, polished check-in experience that doesn't feel like filing a report (our bulk check-in is best-in-class)
 
 ### We Lose When…
 - The buyer wants an all-in-one HR suite (performance reviews + surveys + compensation)
@@ -439,19 +470,77 @@ Our sweet spot: **Mid-market engineering organisations (200–1,000 people)** wh
 - They need 170+ data integrations out of the box
 - Scale exceeds what JSON storage can handle (>500 users)
 - They need SOC 2 compliance documentation
-- Mobile-native experience is required
+- ~~Mobile-native experience is required~~ *(mitigated — mobile web is now fully responsive; only a gap if native app is a hard requirement)*
 
 ---
 
 ## 10. Recommended Next Steps
 
-1. **Ship SSO immediately** — This is the #1 blocker for serious adoption
-2. **Build Jira/Linear integration** — Auto-updating KRs from ticket data would be a killer feature for our audience
-3. **Polish the AI coaching** — Make it the hero of every demo. Record videos showing Claude coaching users through objective writing
-4. **Build the network graph** — No competitor has this. It will generate buzz and screenshots
-5. **Create a "Displaced from Viva Goals/Quantive?" landing page** — These users are actively shopping right now
-6. **Develop a CLI tool** — Low effort, high signal to our developer audience that we're different
-7. **Get 10 internal teams using it and collect testimonials** — Social proof matters more than feature lists
+### ✅ Recently Completed
+- ~~Ship mobile-responsive check-ins~~ → **Done.** Full hamburger sidebar, responsive layouts, mobile check-in works.
+- ~~Build bulk check-in flow~~ → **Done.** `/check-in` page with all-KR bulk update, live progress, parallel submit.
+- ~~Security hardening~~ → **Done.** Rate limiting, Helmet CSP, CORS, path traversal guard, pino logging.
+- ~~WCAG accessibility~~ → **Done.** Focus traps, ARIA labels, keyboard navigation, error boundaries.
+- ~~Test coverage~~ → **Done.** 282 tests across 18 files. Visibility, cascade, objectives, auth, routes, schemas.
+
+### 🔥 Next Priorities (Updated)
+1. **Ship SSO immediately** — Still the #1 blocker for serious adoption. Auth provider interface is ready.
+2. **Ship the AI coaching (Phase 3)** — This is our biggest differentiator and it's not live yet. The integration is designed, the spec is written (§6), but Claude coaching is not wired up. Until this ships, our #1 USP is vapourware. Make it the hero of every demo.
+3. **Build Jira/Linear integration** — Auto-updating KRs from ticket data would be a killer feature for our audience. Now that bulk check-in is shipped, this is the logical next step for reducing check-in friction even further.
+4. **Build the network graph** — No competitor has this. It will generate buzz and screenshots.
+5. **Create a "Displaced from Viva Goals/Quantive?" landing page** — These users are actively shopping right now.
+6. **Develop a CLI tool** — Low effort, high signal to our developer audience that we're different.
+7. **Get 10 internal teams using it and collect testimonials** — Social proof matters more than feature lists.
+8. **Record a demo video of the bulk check-in flow** — This is a concrete, shippable differentiator that's easy to show. "Update all your KRs in 30 seconds" is a compelling demo.
+
+---
+
+## 11. Post-Audit Competitive Position Shift
+
+**What changed**: Three commits (486cacf, 1effe7d, 26c9cc7) shipped 24 authorisation bug fixes, 282 tests, a full bulk check-in flow, mobile-responsive sidebar, WCAG AA accessibility, security hardening, error boundaries, lazy loading, and performance optimisation.
+
+**Net impact on competitive position**:
+
+| Area | Before | After | Competitive Impact |
+|------|--------|-------|-------------------|
+| **Check-in UX** | Basic per-objective check-in | Bulk all-KR check-in with live progress, dirty detection, parallel submit | **Now best-in-class** — Lattice has none, 15Five has text boxes, we have inline KR editing with progress deltas |
+| **Mobile** | Desktop-only | Full responsive with hamburger sidebar | **Closes critical gap** — now on par with or better than Perdoo, Weekdone mobile |
+| **Accessibility** | None | WCAG 2.1 AA (focus traps, ARIA, keyboard nav) | **Ahead of most competitors** — enterprise procurement advantage |
+| **Security** | No rate limiting, no CSP, open CORS | Helmet, rate-limit, CORS, path traversal guard | **Table stakes met** — no longer a self-hosted deployment liability |
+| **Test coverage** | ~75 tests | 282 tests across 18 files | **Confidence signal** — critical for open-source trust |
+| **Reliability** | White-screen on render errors | Error boundaries, lazy loading, memoisation | **Production-ready** — no longer an internal prototype |
+| **Auth bugs** | Admin couldn't see/edit all objectives, canEdit hardcoded | Full visibility/edit rules match spec | **Correct auth model** — vertical visibility + admin override works |
+
+**Honest assessment**: These changes move us from "promising prototype" to "credible product." The bulk check-in flow and mobile responsiveness are genuine competitive advantages. But our biggest claimed differentiator — AI coaching via Claude — is still not wired up. The spec describes it beautifully (§6: quality review, alignment coaching, KR type guidance, check-in prompting, cycle summaries). The architecture supports it. But the code doesn't implement it yet. Until Phase 3 ships, we're selling a vision, not a product, on our #1 USP. That needs to change fast.
+
+**Revised positioning map**: We've moved up from the SMB row toward mid-market on the y-axis (product maturity), but we haven't moved right on the x-axis (AI sophistication) yet:
+
+```
+                    AI Sophistication →
+                    Low                          High
+                ┌──────────────────────────────────────┐
+    Enterprise  │  WorkBoard       ·                    │
+                │    ·                                  │
+                │  Quantive (†)                         │
+                │    ·                                  │
+                │                                       │
+    Mid-Market  │  Lattice  Leapsome  Profit.co         │
+                │    ·        ·          ·              │
+                │  15Five   Culture Amp                  │
+                │    ·        ·                          │
+                │  Perdoo   ★ OBJ TRACKER               │
+                │    ·      (current)                    │
+    SMB         │  Weekdone              ☆ OBJ TRACKER  │
+                │    ·                   (with Phase 3)  │
+                └──────────────────────────────────────┘
+                  HR-Led                     Eng-Led
+                         ← Buyer →
+
+  ★ = Current position   ☆ = Target position (after Phase 3)
+  · = Competitor   † = Acquired/Retired
+```
+
+**The gap**: We've earned our place in mid-market on UX quality, check-in experience, accessibility, and security. But the rightward move to "High AI Sophistication" — which is our entire positioning thesis — depends on shipping Phase 3.
 
 ---
 
@@ -473,4 +562,4 @@ Our sweet spot: **Mid-market engineering organisations (200–1,000 people)** wh
 
 ---
 
-*This analysis is based on web research conducted in February 2026. Pricing, features, and ratings change frequently. Verify critical data points before making strategic decisions.*
+*This analysis is based on web research conducted in February 2026, with a post-audit refresh reflecting features shipped through 2026-02-21. Pricing, features, and ratings change frequently. Verify critical data points before making strategic decisions.*
