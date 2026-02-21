@@ -245,7 +245,8 @@ Each user file contains:
 
 ```typescript
 interface UserFile {
-  user: User;
+  version: number;               // Optimistic locking — incremented on every write
+  user: UserWithPassword;        // Includes passwordHash for auth (stripped before API responses)
   objectives: Objective[];       // All objectives across all cycles
 }
 ```

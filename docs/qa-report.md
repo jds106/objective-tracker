@@ -5,7 +5,7 @@
 **Spec Ref**: `docs/spec.md` v1.0
 **Phase**: End of Phase 2 (Core Experience)
 **Total Issues**: 84 (83 active, 1 retracted)
-**Fixed**: 54 issues resolved across four fix rounds
+**Fixed**: 64 issues resolved across five fix rounds
 
 ---
 
@@ -81,11 +81,25 @@
 | BUG-084 | ✅ Fixed — `<meta name="description">` and `<noscript>` added to index.html |
 | BUG-085 | ✅ Fixed — Unreachable `.catch()` on `Promise.allSettled` removed from useTeamData |
 
-### Remaining Open Issues (29)
+### Round 5 — Remaining Minor Bugs (8/8 resolved)
+| Bug | Status |
+|-----|--------|
+| BUG-024 | ✅ Already resolved — CascadeFilters passes aria-label to Select components and search input |
+| BUG-027 | ✅ Already resolved — useReports reads from ReportsProvider context (cached), no re-fetch per navigation |
+| BUG-048 | ✅ Fixed — Spec updated: UserFile documents `version` field and `UserWithPassword` type |
+| BUG-056 | ✅ Already resolved — `GET /api/users/:id/objectives` already in spec §10.1 |
+| BUG-057 | ✅ Already resolved — `POST /api/admin/users` already in spec §10.1 |
+| BUG-058 | ✅ Already resolved — `PUT /api/admin/users/:id/password` already in spec §10.1 |
+| BUG-059 | ✅ Already resolved — `GET /api/objectives/company` already in spec §10.1 |
+| BUG-063 | ✅ Already resolved — LoadingSpinner uses `py-20`, not `min-h-screen` |
+| BUG-064 | ✅ Already resolved — Layout nav uses `startsWith()` for child route matching |
+| BUG-065 | ✅ Already resolved — RegisterPage has managerEmail + department fields with auto-level |
+
+### Remaining Open Issues (19)
 | Severity | Count | Notes |
 |----------|-------|-------|
 | MAJOR | 16 | Mostly Phase 3+ features (AI, network graph, light mode) and spec gaps |
-| MINOR | 10 | Safari workaround, spec drift docs, registration UX |
+| MINOR | 2 | BUG-025 (Safari foreignObject — platform), BUG-026 (AnimatePresence in SVG — platform) |
 | COSMETIC | 2 | BUG-028 (Upcoming Check-ins — Phase 3), BUG-029 (AI Nudges — Phase 3) |
 | RETRACTED | 1 | BUG-038 |
 
@@ -896,10 +910,10 @@ The HTML document lacks a `<meta name="description">` tag for SEO/accessibility 
 |----------|-------|-------|-----------|
 | CRITICAL | 3 | 3 | 0 |
 | MAJOR | 33 | 21 | 12 |
-| MINOR | 32 | 23 | 9 |
-| COSMETIC | 15 | 8 | 7 |
+| MINOR | 32 | 30 | 2 |
+| COSMETIC | 15 | 10 | 5 |
 | RETRACTED | 1 | — | — |
-| **Total** | **84** | **55** | **28** open |
+| **Total** | **84** | **64** | **19** open |
 
 ## Remaining Priority Items
 
@@ -924,15 +938,10 @@ The HTML document lacks a `<meta name="description">` tag for SEO/accessibility 
 - **BUG-060**: Network Graph View (Phase 3)
 - **BUG-061**: AI Assistant Panel (Phase 3)
 
-### Minor still open
+### Minor still open (platform limitations only)
 
-- **BUG-024**: Cascade filter aria-labels (already present — verify Select component forwards them)
-- **BUG-025**: Safari foreignObject issues (platform limitation)
-- **BUG-026**: Framer Motion AnimatePresence in SVG (platform limitation)
-- **BUG-027**: useReports fires on every page load
-- **BUG-048**: UserFile.user type spec drift
-- **BUG-056–059**: Spec documentation of undocumented endpoints
-- **BUG-065**: Registration form missing managerId/level fields
+- **BUG-025**: Safari foreignObject rendering (platform limitation — would need non-foreignObject fallback)
+- **BUG-026**: Framer Motion AnimatePresence in SVG (platform limitation — would need SVG-native animations)
 
 ### Cosmetic still open
 
@@ -941,4 +950,4 @@ The HTML document lacks a `<meta name="description">` tag for SEO/accessibility 
 
 ---
 
-*Report generated 2026-02-21. Updated with four rounds of fixes (critical, major, minor, cosmetic). 55 of 84 issues resolved. 298 tests passing. All issues verified against spec v1.0 and current codebase on `main` branch.*
+*Report generated 2026-02-21. Updated with five rounds of fixes (critical, major, minor, cosmetic, remaining minor). 64 of 84 issues resolved. 298 tests passing. All issues verified against spec v1.0 and current codebase on `main` branch.*
