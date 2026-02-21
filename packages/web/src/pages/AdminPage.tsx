@@ -393,6 +393,13 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
                 user={setPasswordUser}
                 onClose={() => setSetPasswordUser(null)}
             />
+
+            {/* CSV import modal */}
+            <CsvImportModal
+                isOpen={showCsvImport}
+                onClose={() => setShowCsvImport(false)}
+                onImported={fetchUsers}
+            />
         </div>
     );
 }
@@ -1604,6 +1611,246 @@ function CyclesTab() {
                 </form>
             </Modal>
         </div>
+    );
+}
+
+// ── CSV Import Modal ────────────────────────────────────────
+
+function parseCsvText(text: string): Array<Record<string, string>> {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    return lines.slice(1).map(line => {
+        // Simple CSV parser — handles quoted fields
+        const values: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (const ch of line) {
+            if (ch === '"') {
+                inQuotes = !inQuotes;
+            } else if (ch === ',' && !inQuotes) {
+                values.push(current.trim());
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+        values.push(current.trim());
+
+        const row: Record<string, string> = {};
+        for (let i = 0; i < headers.length; i++) {
+            row[headers[i]] = values[i] ?? '';
+        }
+        return row;
+    });
+}
+
+function CsvImportModal({ isOpen, onClose, onImported }: {
+    isOpen: boolean;
+    onClose: () => void;
+    onImported: () => void;
+}) {
+    const [csvText, setCsvText] = useState('');
+    const [preview, setPreview] = useState<Array<Record<string, string>>>([]);
+    const [importing, setImporting] = useState(false);
+    const [error, setError] = useState('');
+    const [importResult, setImportResult] = useState<{
+        results: Array<{ email: string; status: string; message?: string }>;
+        summary: { total: number; created: number; skipped: number; errors: number };
+    } | null>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setCsvText('');
+            setPreview([]);
+            setError('');
+            setImportResult(null);
+        }
+    }, [isOpen]);
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            setCsvText(text);
+            setPreview(parseCsvText(text));
+            setError('');
+        };
+        reader.readAsText(file);
+    };
+
+    const handleTextChange = (text: string) => {
+        setCsvText(text);
+        setPreview(parseCsvText(text));
+    };
+
+    const handleImport = async () => {
+        if (preview.length === 0) {
+            setError('No valid rows to import');
+            return;
+        }
+
+        // Validate required columns
+        const requiredCols = ['email', 'displayName', 'jobTitle'];
+        const missingCols = requiredCols.filter(col => !(col in preview[0]));
+        if (missingCols.length > 0) {
+            setError(`Missing required columns: ${missingCols.join(', ')}`);
+            return;
+        }
+
+        setImporting(true);
+        setError('');
+        try {
+            const rows = preview.map(row => ({
+                email: row.email ?? '',
+                displayName: row.displayName ?? '',
+                jobTitle: row.jobTitle ?? '',
+                department: row.department ?? '',
+                managerEmail: row.managerEmail ?? '',
+                level: row.level ? Number(row.level) : undefined,
+            }));
+
+            const { data } = await adminApi.importUsersFromCsv(rows);
+            setImportResult(data);
+            onImported();
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to import users'));
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Import Users from CSV" maxWidth="max-w-2xl">
+            {importResult ? (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3">
+                            <p className="text-2xl font-bold text-emerald-400">{importResult.summary.created}</p>
+                            <p className="text-xs text-emerald-300">Created</p>
+                        </div>
+                        <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
+                            <p className="text-2xl font-bold text-amber-400">{importResult.summary.skipped}</p>
+                            <p className="text-xs text-amber-300">Skipped</p>
+                        </div>
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3">
+                            <p className="text-2xl font-bold text-red-400">{importResult.summary.errors}</p>
+                            <p className="text-xs text-red-300">Errors</p>
+                        </div>
+                    </div>
+
+                    {importResult.results.some(r => r.status === 'error') && (
+                        <div className="max-h-40 overflow-y-auto rounded-lg bg-surface border border-slate-700 p-3">
+                            {importResult.results
+                                .filter(r => r.status === 'error')
+                                .map((r, i) => (
+                                    <p key={i} className="text-xs text-red-400">
+                                        {r.email}: {r.message}
+                                    </p>
+                                ))}
+                        </div>
+                    )}
+
+                    <div className="flex justify-end">
+                        <button
+                            onClick={onClose}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
+                        >
+                            Done
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-400">
+                        Upload a CSV file with the following columns:
+                        <code className="ml-1 text-slate-300">email</code>,{' '}
+                        <code className="text-slate-300">displayName</code>,{' '}
+                        <code className="text-slate-300">jobTitle</code>,{' '}
+                        <code className="text-slate-300">department</code> (optional),{' '}
+                        <code className="text-slate-300">managerEmail</code> (optional),{' '}
+                        <code className="text-slate-300">level</code> (optional, 1–5).
+                    </p>
+
+                    {error && (
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">{error}</div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                        <label className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors cursor-pointer">
+                            Choose File
+                            <input
+                                type="file"
+                                accept=".csv"
+                                onChange={handleFileUpload}
+                                className="hidden"
+                            />
+                        </label>
+                        <span className="text-xs text-slate-500">or paste CSV data below</span>
+                    </div>
+
+                    <textarea
+                        value={csvText}
+                        onChange={e => handleTextChange(e.target.value)}
+                        rows={6}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-xs text-slate-200 font-mono focus:border-indigo-500 focus:outline-none resize-none"
+                        placeholder={'email,displayName,jobTitle,department,managerEmail,level\njane@company.com,Jane Smith,Software Engineer,Engineering,bob@company.com,5'}
+                    />
+
+                    {preview.length > 0 && (
+                        <div>
+                            <p className="text-xs font-medium text-slate-400 mb-2">{preview.length} row{preview.length !== 1 ? 's' : ''} detected</p>
+                            <div className="max-h-32 overflow-y-auto rounded-lg bg-surface border border-slate-700">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="border-b border-slate-700 text-slate-400">
+                                            {Object.keys(preview[0]).map(col => (
+                                                <th key={col} className="px-2 py-1 text-left">{col}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {preview.slice(0, 5).map((row, i) => (
+                                            <tr key={i} className="border-b border-slate-700/50">
+                                                {Object.values(row).map((val, j) => (
+                                                    <td key={j} className="px-2 py-1 text-slate-300 truncate max-w-[150px]">{val}</td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {preview.length > 5 && (
+                                    <p className="text-center text-xs text-slate-500 py-1">
+                                        and {preview.length - 5} more…
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleImport}
+                            disabled={importing || preview.length === 0}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                        >
+                            {importing ? 'Importing…' : `Import ${preview.length} User${preview.length !== 1 ? 's' : ''}`}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </Modal>
     );
 }
 

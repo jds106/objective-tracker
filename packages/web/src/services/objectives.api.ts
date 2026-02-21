@@ -52,3 +52,7 @@ export function deleteKeyResult(id: string): Promise<void> {
 export function recordCheckIn(keyResultId: string, input: CheckInBody): Promise<ApiResponse<CheckIn>> {
   return apiClient.post(`/key-results/${keyResultId}/check-in`, input);
 }
+
+export function rollforwardObjective(id: string, targetCycleId: string): Promise<ApiResponse<Objective>> {
+  return apiClient.post(`/objectives/${id}/rollforward`, { targetCycleId });
+}

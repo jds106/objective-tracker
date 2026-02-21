@@ -41,7 +41,10 @@ export const createKeyResultSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   type: z.enum(['percentage', 'metric', 'milestone', 'binary']),
   config: keyResultConfigSchema,
-});
+}).refine(
+  (data) => data.type === data.config.type,
+  { message: 'Key result type must match config type', path: ['config', 'type'] },
+);
 
 export const updateKeyResultSchema = z.object({
   title: z.string().min(1).max(200).optional(),

@@ -29,6 +29,14 @@ export const updateCycleSchema = z.object({
   endDate: z.string().date().optional(),
   status: z.enum(['planning', 'active', 'review', 'closed']).optional(),
   quarters: z.array(quarterSchema).min(1).optional(),
-});
+}).refine(
+  (c) => {
+    if (c.startDate && c.endDate) {
+      return c.startDate < c.endDate;
+    }
+    return true;
+  },
+  { message: 'Cycle start date must be before end date', path: ['endDate'] },
+);
 
 export type UpdateCycleBody = z.infer<typeof updateCycleSchema>;

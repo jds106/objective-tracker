@@ -255,6 +255,19 @@ describe('createKeyResultSchema', () => {
     };
     expect(createKeyResultSchema.safeParse(invalid).success).toBe(false);
   });
+
+  it('should reject mismatched type and config.type', () => {
+    const mismatched = {
+      title: 'Complete migration',
+      type: 'binary',
+      config: { type: 'percentage', currentValue: 50 },
+    };
+    const result = createKeyResultSchema.safeParse(mismatched);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some(i => i.message === 'Key result type must match config type')).toBe(true);
+    }
+  });
 });
 
 describe('checkInSchema', () => {

@@ -12,7 +12,7 @@ export const registerSchema = z.object({
   jobTitle: z.string().min(1, 'Job title is required').max(100),
   managerId: z.string().uuid().nullable().optional().default(null),
   managerEmail: z.string().email().optional(),
-  level: z.number().int().min(1).max(10).optional().default(5),
+  level: z.number().int().min(1).max(5).optional().default(5),
   department: z.string().max(100).optional(),
 });
 

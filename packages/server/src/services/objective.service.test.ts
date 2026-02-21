@@ -80,6 +80,7 @@ function buildMockCycleRepo(cycles: Cycle[]): CycleRepository {
     getActive: async () => cycles.find(c => c.status === 'active') ?? null,
     getById: async (id) => byId.get(id) ?? null,
     create: async () => { throw new Error('not needed'); },
+    update: async () => { throw new Error('not needed'); },
   };
 }
 

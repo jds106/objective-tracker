@@ -647,28 +647,30 @@ objective-tracker/
 - `GET /api/cascade/tree` — Full cascade tree (scoped to user visibility). Company-level objectives are always included as root nodes. Admin users see the full tree for all users.
 - `GET /api/cascade/graph` — Network graph data (scoped to user visibility)
 
+**Objectives — Rollforward**
+- `POST /api/objectives/:id/rollforward` — Roll forward an active objective to a new cycle (copies objective + KRs with reset progress, marks original as `rolled_forward`)
+
 **Cycles**
 - `GET /api/cycles` — List all cycles
 - `GET /api/cycles/active` — Get current active cycle
-- `POST /api/cycles` — Create cycle (admin)
 
-**AI**
-- `POST /api/ai/review` — Review an objective for quality
-- `POST /api/ai/suggest` — Suggest objectives given a parent
-- `POST /api/ai/summarise` — Generate cycle/review summary
+**AI** (requires `ANTHROPIC_API_KEY` to be configured; returns 503 if not set)
+- `POST /api/ai/review` — Review an objective for quality. Accepts `{ objectiveId }`, returns score (1–10), summary, strengths, and categorised suggestions.
+- `POST /api/ai/suggest` — Suggest child objectives given a parent. Accepts `{ parentObjectiveId, context? }`, returns 2–3 suggested objectives with key results.
+- `POST /api/ai/summarise` — Generate cycle review summary. Accepts `{ userId, cycleId }`, returns overview, highlights, at-risk items, and recommendations.
 
 **Admin** (all endpoints require `role: 'admin'`)
-- `POST /api/admin/users` — Create a new user (always assigned `standard` role)
+- `POST /api/admin/users` — Create a new user
 - `GET /api/admin/users` — List all users
-- `PUT /api/admin/users/:id` — Update user (role, department, manager, job title, level)
+- `PUT /api/admin/users/:id` — Update user (role, department, manager, job title, level, displayName)
 - `DELETE /api/admin/users/:id` — Delete user (cannot self-delete)
 - `POST /api/admin/users/:id/reset-password` — Generate temporary password for user
 - `PUT /api/admin/users/:id/password` — Set a specific password for a user
+- `POST /api/admin/users/import` — Bulk import users from CSV data. Accepts `{ rows: [{ email, displayName, jobTitle, department?, managerEmail?, level? }] }`. Returns per-row status (created/skipped/error) and summary counts. Generates random initial passwords.
 - `GET /api/admin/objectives` — List all objectives org-wide (resolves owner names when user list is available)
 - `POST /api/admin/objectives/company` — Create a root-level company objective
 - `POST /api/admin/cycles` — Create a new objective cycle (with quarters)
-- `POST /api/admin/import/workday` — Upload and process Workday CSV
-- `GET /api/admin/org` — Full org tree
+- `PUT /api/admin/cycles/:id` — Update cycle (name, dates, status). Status transitions are validated: planning→active→review→closed. Only one active cycle allowed at a time.
 
 ---
 

@@ -20,6 +20,7 @@ import {
   CheckInService,
   CycleService,
   CascadeService,
+  AiService,
 } from './services/index.js';
 import { ConsoleNotificationService } from './services/index.js';
 import { createRoutes } from './routes/index.js';
@@ -74,13 +75,24 @@ export async function createApp(config: Config): Promise<Express> {
   // Initialise services
   const visibilityService = new VisibilityService(userRepo);
   const userService = new UserService(userRepo);
-  const objectiveService = new ObjectiveService(objectiveRepo, cycleRepo);
+  const objectiveService = new ObjectiveService(objectiveRepo, cycleRepo, keyResultRepo);
   const keyResultService = new KeyResultService(keyResultRepo, objectiveRepo);
   const checkInService = new CheckInService(keyResultRepo);
   const cycleService = new CycleService(cycleRepo);
   const cascadeService = new CascadeService(userRepo, objectiveRepo, visibilityService);
   const notificationService = new ConsoleNotificationService(config.FRONTEND_URL);
   const passwordResetService = new PasswordResetService(userRepo, notificationService, config.BCRYPT_SALT_ROUNDS);
+
+  // Initialise AI service (optional — only if API key is configured)
+  const aiService = config.ANTHROPIC_API_KEY
+    ? new AiService(config.ANTHROPIC_API_KEY, config.ANTHROPIC_MODEL, objectiveRepo, userRepo)
+    : null;
+
+  if (aiService) {
+    logger.info('AI features enabled (Anthropic API key configured)');
+  } else {
+    logger.info('AI features disabled (no ANTHROPIC_API_KEY set)');
+  }
 
   // Mount routes
   const routes = createRoutes({
@@ -94,6 +106,7 @@ export async function createApp(config: Config): Promise<Express> {
     cycleService,
     cascadeService,
     passwordResetService,
+    aiService,
     rateLimiters,
     dataDir: config.DATA_DIR,
     saltRounds: config.BCRYPT_SALT_ROUNDS,

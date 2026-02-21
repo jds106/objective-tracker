@@ -1,5 +1,5 @@
 export { generateId } from './id.js';
-export { nowISO, toISODate, isBeforeDate, isWithinRange } from './dates.js';
+export { nowISO, toISODate, isBeforeDate, isWithinRange, formatDate, formatDateTime, formatRelativeTime } from './dates.js';
 export { calculateProgress, calculateObjectiveProgress } from './progress.js';
 export {
   calculateHealthStatus,

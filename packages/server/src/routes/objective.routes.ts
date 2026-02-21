@@ -88,6 +88,29 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
     }
   });
 
+  /** Roll forward an objective to a new cycle */
+  router.post('/:id/rollforward', auth, validateId(), async (req, res, next) => {
+    try {
+      const objective = await deps.objectiveService.getById(req.params.id);
+      const canEdit = await deps.visibilityService.canEdit(req.user!.id, objective.ownerId);
+      if (!canEdit) {
+        res.status(403).json({ error: 'You do not have permission to roll forward this objective' });
+        return;
+      }
+
+      const { targetCycleId } = req.body;
+      if (!targetCycleId || typeof targetCycleId !== 'string') {
+        res.status(400).json({ error: 'targetCycleId is required' });
+        return;
+      }
+
+      const newObjective = await deps.objectiveService.rollforward(req.params.id, targetCycleId);
+      res.status(201).json({ data: newObjective });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/:id/cascade', auth, validateId(), async (req, res, next) => {
     try {
       const path = await deps.cascadeService.getCascadePath(req.params.id, req.user!.id);

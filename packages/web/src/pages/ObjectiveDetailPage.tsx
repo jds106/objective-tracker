@@ -7,6 +7,7 @@ import type {
   UpdateKeyResultBody,
   CheckInBody,
   UpdateObjectiveBody,
+  AiReviewResult,
 } from '@objective-tracker/shared';
 import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
 import { useCycle } from '../contexts/cycle.context.js';
@@ -26,12 +27,13 @@ import { LoadingSpinner } from '../components/LoadingSpinner.js';
 import { PageTransition } from '../components/PageTransition.js';
 import * as objectivesApi from '../services/objectives.api.js';
 import * as cascadeApi from '../services/cascade.api.js';
+import * as aiApi from '../services/ai.api.js';
 
 export function ObjectiveDetailPage() {
-  const { id = '' } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { activeCycle, allCycles } = useCycle();
-  const { objective, canEdit, isLoading, error, refetch } = useObjective(id);
+  const { objective, canEdit, isLoading, error, refetch } = useObjective(id ?? '');
 
   const [cascadePath, setCascadePath] = useState<Objective[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -45,6 +47,10 @@ export function ObjectiveDetailPage() {
   const [rollforwardCycleId, setRollforwardCycleId] = useState('');
   const [rollforwardLoading, setRollforwardLoading] = useState(false);
   const [rollforwardError, setRollforwardError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [aiReview, setAiReview] = useState<AiReviewResult | null>(null);
+  const [aiReviewLoading, setAiReviewLoading] = useState(false);
+  const [aiReviewError, setAiReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -52,6 +58,11 @@ export function ObjectiveDetailPage() {
       .then(({ data }) => setCascadePath(data))
       .catch(() => {});
   }, [id]);
+
+  if (!id) {
+    navigate('/dashboard', { replace: true });
+    return null;
+  }
 
   if (isLoading) {
     return (
@@ -80,29 +91,50 @@ export function ObjectiveDetailPage() {
   const health = calculateHealthStatus(progress, activeCycle, allCheckIns);
 
   const handleEditObjective = async (input: UpdateObjectiveBody) => {
-    await objectivesApi.updateObjective(objective.id, input as UpdateObjectiveBody);
-    await refetch();
+    setActionError(null);
+    try {
+      await objectivesApi.updateObjective(objective.id, input as UpdateObjectiveBody);
+      await refetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to update objective');
+      throw err; // Re-throw so the form modal can show its own error state
+    }
   };
 
   const handleAddKR = async (input: CreateKeyResultBody | UpdateKeyResultBody) => {
-    await objectivesApi.createKeyResult(objective.id, input as CreateKeyResultBody);
-    await refetch();
+    setActionError(null);
+    try {
+      await objectivesApi.createKeyResult(objective.id, input as CreateKeyResultBody);
+      await refetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to add key result');
+      throw err;
+    }
   };
 
   const handleEditKR = async (input: CreateKeyResultBody | UpdateKeyResultBody) => {
     if (!editingKR) return;
-    await objectivesApi.updateKeyResult(editingKR.id, input as UpdateKeyResultBody);
-    setEditingKR(null);
-    await refetch();
+    setActionError(null);
+    try {
+      await objectivesApi.updateKeyResult(editingKR.id, input as UpdateKeyResultBody);
+      setEditingKR(null);
+      await refetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to update key result');
+      throw err;
+    }
   };
 
   const handleDeleteKR = async () => {
     if (!confirmDeleteKR) return;
     setDeleteLoading(true);
+    setActionError(null);
     try {
       await objectivesApi.deleteKeyResult(confirmDeleteKR.id);
       setConfirmDeleteKR(null);
       await refetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete key result');
     } finally {
       setDeleteLoading(false);
     }
@@ -110,19 +142,45 @@ export function ObjectiveDetailPage() {
 
   const handleCheckIn = async (input: CheckInBody) => {
     if (!checkInKR) return;
-    await objectivesApi.recordCheckIn(checkInKR.id, input);
-    setCheckInKR(null);
-    await refetch();
+    setActionError(null);
+    try {
+      await objectivesApi.recordCheckIn(checkInKR.id, input);
+      setCheckInKR(null);
+      await refetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to record check-in');
+      throw err;
+    }
   };
 
   const handleDeleteObjective = async () => {
     setDeleteLoading(true);
+    setActionError(null);
     try {
       await objectivesApi.deleteObjective(objective.id);
       navigate('/dashboard');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete objective');
     } finally {
       setDeleteLoading(false);
       setConfirmDeleteObj(false);
+    }
+  };
+
+  const handleAiReview = async () => {
+    setAiReviewLoading(true);
+    setAiReviewError(null);
+    setAiReview(null);
+    try {
+      const { data } = await aiApi.reviewObjective(objective.id);
+      setAiReview(data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to get AI review';
+      setAiReviewError(msg.includes('503') || msg.includes('not configured')
+        ? 'AI features are not enabled. Ask your admin to configure the ANTHROPIC_API_KEY.'
+        : msg);
+    } finally {
+      setAiReviewLoading(false);
     }
   };
 
@@ -152,6 +210,18 @@ export function ObjectiveDetailPage() {
         <CascadeBreadcrumb path={cascadePath} className="mb-4" />
       )}
 
+      {actionError && (
+        <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 flex items-center justify-between">
+          <p className="text-sm text-red-400">{actionError}</p>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-red-400 hover:text-red-300 text-xs ml-4 shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-2xl font-bold text-slate-100">{objective.title}</h2>
@@ -174,6 +244,13 @@ export function ObjectiveDetailPage() {
           >
             Edit
           </button>
+          <button
+            onClick={handleAiReview}
+            disabled={aiReviewLoading}
+            className="rounded-lg bg-purple-600/20 px-3 py-1.5 text-sm font-medium text-purple-400 hover:bg-purple-600/30 transition-colors disabled:opacity-50"
+          >
+            {aiReviewLoading ? 'Reviewing…' : '✦ AI Review'}
+          </button>
           {objective.status === 'active' && rollforwardTargetCycles.length > 0 && (
             <button
               onClick={() => {
@@ -193,6 +270,81 @@ export function ObjectiveDetailPage() {
             >
               Delete
             </button>
+          )}
+        </div>
+      )}
+
+      {/* AI Review Results */}
+      {aiReviewError && (
+        <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+          {aiReviewError}
+          <button onClick={() => setAiReviewError(null)} className="ml-2 underline text-red-300">dismiss</button>
+        </div>
+      )}
+
+      {aiReviewLoading && (
+        <div className="mt-4 rounded-xl bg-purple-500/10 border border-purple-500/30 p-4">
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
+            <p className="text-sm text-purple-300">Analysing objective quality with AI…</p>
+          </div>
+        </div>
+      )}
+
+      {aiReview && !aiReviewLoading && (
+        <div className="mt-4 rounded-xl bg-purple-500/10 border border-purple-500/30 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-purple-300">✦ AI Quality Review</h3>
+            <div className="flex items-center gap-2">
+              <span className={`text-lg font-bold ${
+                aiReview.score >= 8 ? 'text-emerald-400' :
+                aiReview.score >= 5 ? 'text-amber-400' :
+                'text-red-400'
+              }`}>
+                {aiReview.score}/10
+              </span>
+              <button
+                onClick={() => setAiReview(null)}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                dismiss
+              </button>
+            </div>
+          </div>
+
+          <p className="text-sm text-slate-300 mb-3">{aiReview.summary}</p>
+
+          {aiReview.strengths.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-medium text-emerald-400 mb-1">Strengths</p>
+              <ul className="space-y-1">
+                {aiReview.strengths.map((s, i) => (
+                  <li key={i} className="text-xs text-slate-400 flex items-start gap-1.5">
+                    <span className="text-emerald-500 mt-0.5 shrink-0">✓</span>
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {aiReview.suggestions.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-amber-400 mb-1">Suggestions</p>
+              <ul className="space-y-2">
+                {aiReview.suggestions.map((s, i) => (
+                  <li key={i} className="text-xs">
+                    <span className="inline-block rounded-full bg-slate-700/60 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 mr-1.5">
+                      {s.category}
+                    </span>
+                    <span className="text-slate-300">{s.message}</span>
+                    {s.rewrite && (
+                      <p className="mt-1 ml-4 text-purple-300 italic">&ldquo;{s.rewrite}&rdquo;</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}

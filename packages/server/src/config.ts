@@ -7,6 +7,8 @@ const configSchema = z.object({
   JWT_EXPIRY: z.string().default('24h'),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(10).max(16).default(12),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-20250514'),
 });
 
 export type Config = z.infer<typeof configSchema>;

@@ -9,6 +9,7 @@ import type { CheckInService } from '../services/check-in.service.js';
 import type { CycleService } from '../services/cycle.service.js';
 import type { CascadeService } from '../services/cascade.service.js';
 import type { RateLimiters } from '../middleware/rate-limit.middleware.js';
+import type { AiService } from '../services/ai.service.js';
 import { createAuthRoutes } from './auth.routes.js';
 import { createUserRoutes } from './user.routes.js';
 import { createObjectiveRoutes } from './objective.routes.js';
@@ -16,6 +17,7 @@ import { createKeyResultRoutes } from './key-result.routes.js';
 import { createCycleRoutes } from './cycle.routes.js';
 import { createCascadeRoutes } from './cascade.routes.js';
 import { createAdminRoutes } from './admin.routes.js';
+import { createAiRoutes } from './ai.routes.js';
 
 export interface RouteDependencies {
   authProvider: AuthProvider;
@@ -28,6 +30,7 @@ export interface RouteDependencies {
   cycleService: CycleService;
   cascadeService: CascadeService;
   passwordResetService: PasswordResetService;
+  aiService: AiService | null;
   rateLimiters: RateLimiters;
   dataDir: string;
   saltRounds: number;
@@ -43,6 +46,7 @@ export function createRoutes(deps: RouteDependencies): Router {
   router.use('/cycles', createCycleRoutes(deps));
   router.use('/cascade', createCascadeRoutes(deps));
   router.use('/admin', createAdminRoutes(deps));
+  router.use('/ai', createAiRoutes(deps));
 
   return router;
 }

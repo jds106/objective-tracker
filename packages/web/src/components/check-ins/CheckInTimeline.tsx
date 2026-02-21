@@ -1,20 +1,10 @@
 import { ChartBarIcon } from '@heroicons/react/24/outline';
 import type { CheckIn } from '@objective-tracker/shared';
+import { formatDateTime } from '@objective-tracker/shared';
 import { EmptyState } from '../EmptyState.js';
 
 interface CheckInTimelineProps {
   checkIns: CheckIn[];
-}
-
-function formatDate(timestamp: string): string {
-  return new Date(timestamp).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
 }
 
 export function CheckInTimeline({ checkIns }: CheckInTimelineProps) {
@@ -63,7 +53,7 @@ export function CheckInTimeline({ checkIns }: CheckInTimelineProps) {
                 {ci.note && (
                   <p className="mt-1 text-sm text-slate-400">{ci.note}</p>
                 )}
-                <p className="mt-1 text-xs text-slate-500">{formatDate(ci.timestamp)}</p>
+                <p className="mt-1 text-xs text-slate-500">{formatDateTime(ci.timestamp)}</p>
               </div>
             </div>
           );

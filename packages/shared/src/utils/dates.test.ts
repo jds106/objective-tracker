@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { nowISO, toISODate, isBeforeDate, isWithinRange } from './dates.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { nowISO, toISODate, isBeforeDate, isWithinRange, formatDate, formatDateTime, formatRelativeTime } from './dates.js';
 
 describe('Date utilities', () => {
   describe('nowISO', () => {
@@ -69,6 +69,100 @@ describe('Date utilities', () => {
 
     it('should return false when date is after range', () => {
       expect(isWithinRange('2027-01-01', '2026-01-01', '2026-12-31')).toBe(false);
+    });
+  });
+
+  describe('formatDate', () => {
+    it('should format an ISO timestamp as YYYY-MM-DD', () => {
+      expect(formatDate('2026-06-15T14:30:00.000Z')).toBe('2026-06-15');
+    });
+
+    it('should format a date-only string as YYYY-MM-DD', () => {
+      expect(formatDate('2026-01-01')).toBe('2026-01-01');
+    });
+
+    it('should pad single-digit months and days', () => {
+      expect(formatDate('2026-03-05T00:00:00.000Z')).toBe('2026-03-05');
+    });
+
+    it('should return the input string for invalid dates', () => {
+      expect(formatDate('not-a-date')).toBe('not-a-date');
+    });
+
+    it('should handle end-of-year dates', () => {
+      expect(formatDate('2026-12-31T23:59:59.999Z')).toBe('2026-12-31');
+    });
+  });
+
+  describe('formatDateTime', () => {
+    it('should format a timestamp as YYYY-MM-DD HH:MM:SS', () => {
+      // Use a fixed UTC date and check that it produces local time correctly
+      const d = new Date(2026, 5, 15, 14, 30, 45); // June 15, 2026 14:30:45 local
+      const result = formatDateTime(d.toISOString());
+      expect(result).toBe('2026-06-15 14:30:45');
+    });
+
+    it('should pad single-digit hours, minutes, seconds', () => {
+      const d = new Date(2026, 0, 5, 3, 7, 9); // Jan 5, 2026 03:07:09 local
+      const result = formatDateTime(d.toISOString());
+      expect(result).toBe('2026-01-05 03:07:09');
+    });
+
+    it('should handle midnight', () => {
+      const d = new Date(2026, 0, 1, 0, 0, 0);
+      const result = formatDateTime(d.toISOString());
+      expect(result).toBe('2026-01-01 00:00:00');
+    });
+
+    it('should return the input string for invalid dates', () => {
+      expect(formatDateTime('garbage')).toBe('garbage');
+    });
+  });
+
+  describe('formatRelativeTime', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should return "just now" for timestamps less than 1 minute ago', () => {
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+      const timestamp = new Date(now - 30_000).toISOString(); // 30 seconds ago
+      expect(formatRelativeTime(timestamp)).toBe('just now');
+    });
+
+    it('should return "Xm ago" for timestamps less than 1 hour ago', () => {
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+      const timestamp = new Date(now - 15 * 60_000).toISOString(); // 15 minutes ago
+      expect(formatRelativeTime(timestamp)).toBe('15m ago');
+    });
+
+    it('should return "Xh ago" for timestamps less than 24 hours ago', () => {
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+      const timestamp = new Date(now - 5 * 60 * 60_000).toISOString(); // 5 hours ago
+      expect(formatRelativeTime(timestamp)).toBe('5h ago');
+    });
+
+    it('should return "Xd ago" for timestamps less than 7 days ago', () => {
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+      const timestamp = new Date(now - 3 * 24 * 60 * 60_000).toISOString(); // 3 days ago
+      expect(formatRelativeTime(timestamp)).toBe('3d ago');
+    });
+
+    it('should return YYYY-MM-DD for timestamps 7+ days ago', () => {
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+      const old = new Date(now - 14 * 24 * 60 * 60_000); // 14 days ago
+      const result = formatRelativeTime(old.toISOString());
+      // Should be a YYYY-MM-DD format string
+      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('should return the input string for invalid dates', () => {
+      expect(formatRelativeTime('invalid')).toBe('invalid');
     });
   });
 });

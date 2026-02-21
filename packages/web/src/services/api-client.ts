@@ -82,6 +82,9 @@ class ApiClient {
 
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
+      if (response.status === 401 && this.onUnauthorised) {
+        this.onUnauthorised();
+      }
       throw new ApiError(response.status, body.error ?? 'Upload failed', body.details);
     }
 

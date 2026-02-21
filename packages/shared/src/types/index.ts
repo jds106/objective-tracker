@@ -35,3 +35,12 @@ export {
   ForbiddenError,
   ConcurrencyError,
 } from './errors.js';
+export type {
+  AiReviewResult,
+  AiSuggestion,
+  AiSuggestedObjective,
+  AiSummaryResult,
+  AiReviewRequest,
+  AiSuggestRequest,
+  AiSummariseRequest,
+} from './ai.js';

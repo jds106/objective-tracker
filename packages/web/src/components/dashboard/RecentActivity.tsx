@@ -1,5 +1,6 @@
 import { ClockIcon } from '@heroicons/react/24/outline';
 import type { Objective, CheckIn } from '@objective-tracker/shared';
+import { formatRelativeTime } from '@objective-tracker/shared';
 import { EmptyState } from '../EmptyState.js';
 
 interface ActivityItem {
@@ -10,24 +11,6 @@ interface ActivityItem {
 
 interface RecentActivityProps {
   objectives: Objective[];
-}
-
-function formatRelativeTime(timestamp: string): string {
-  const now = Date.now();
-  const then = new Date(timestamp).getTime();
-  const diffMs = now - then;
-  const diffMins = Math.floor(diffMs / 60_000);
-
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return new Date(timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 export function RecentActivity({ objectives }: RecentActivityProps) {

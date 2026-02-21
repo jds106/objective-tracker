@@ -174,6 +174,95 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
         }
     });
 
+    /** Bulk import users from CSV data */
+    router.post('/users/import', async (req, res, next) => {
+        try {
+            const { rows } = req.body;
+            if (!Array.isArray(rows) || rows.length === 0) {
+                res.status(400).json({ error: 'Request body must contain a non-empty "rows" array' });
+                return;
+            }
+
+            const results: Array<{ email: string; status: 'created' | 'skipped' | 'error'; message?: string }> = [];
+
+            // First pass: resolve manager emails to IDs
+            const allUsers = await deps.userRepo.getAll();
+            const emailToUser = new Map(allUsers.map(u => [u.email.toLowerCase(), u]));
+
+            for (const row of rows) {
+                const email = (row.email ?? '').trim().toLowerCase();
+                const displayName = (row.displayName ?? '').trim();
+                const jobTitle = (row.jobTitle ?? '').trim();
+                const department = (row.department ?? '').trim();
+                const managerEmail = (row.managerEmail ?? '').trim().toLowerCase();
+                const level = Number(row.level) || 5;
+
+                if (!email || !displayName || !jobTitle) {
+                    results.push({ email: email || '(empty)', status: 'error', message: 'Missing required fields: email, displayName, jobTitle' });
+                    continue;
+                }
+
+                // Skip if user already exists
+                if (emailToUser.has(email)) {
+                    results.push({ email, status: 'skipped', message: 'User already exists' });
+                    continue;
+                }
+
+                // Resolve manager
+                let managerId: string | null = null;
+                if (managerEmail) {
+                    const manager = emailToUser.get(managerEmail);
+                    if (manager) {
+                        managerId = manager.id;
+                    }
+                    // If manager not found, import without manager — can be linked later
+                }
+
+                try {
+                    // Generate a random initial password
+                    const tempPassword = randomBytes(12).toString('base64url');
+                    const passwordHash = await PasswordAuthProvider.hashPassword(tempPassword, deps.saltRounds);
+
+                    const user = await deps.userRepo.create({
+                        email,
+                        displayName,
+                        jobTitle,
+                        managerId,
+                        level,
+                        department: department || undefined,
+                        role: 'standard',
+                        passwordHash,
+                    });
+
+                    // Add to lookup so subsequent rows can reference this user as a manager
+                    emailToUser.set(email, { ...user, passwordHash: '' } as typeof allUsers[number]);
+
+                    results.push({ email, status: 'created' });
+                } catch (err) {
+                    results.push({ email, status: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
+                }
+            }
+
+            const created = results.filter(r => r.status === 'created').length;
+            const skipped = results.filter(r => r.status === 'skipped').length;
+            const errors = results.filter(r => r.status === 'error').length;
+
+            logger.info(
+                { adminId: req.user!.id, created, skipped, errors },
+                'Admin imported users from CSV',
+            );
+
+            res.json({
+                data: {
+                    results,
+                    summary: { total: rows.length, created, skipped, errors },
+                },
+            });
+        } catch (err) {
+            next(err);
+        }
+    });
+
     /** Create a company-level root objective */
     router.post('/objectives/company', validate(companyObjectiveSchema), async (req, res, next) => {
         try {

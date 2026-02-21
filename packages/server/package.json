@@ -10,6 +10,7 @@
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@objective-tracker/shared": "workspace:*",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",

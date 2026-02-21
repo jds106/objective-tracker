@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import type { ObjectiveStatus, HealthStatus, Cycle } from '@objective-tracker/shared';
 import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
 import { useCycle } from '../contexts/cycle.context.js';
@@ -10,6 +10,12 @@ import { ErrorAlert } from '../components/ErrorAlert.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
 import { PageTransition } from '../components/PageTransition.js';
 import type { CascadeNode } from '../services/cascade.api.js';
+
+const D3NetworkGraph = lazy(() =>
+  import('../components/cascade/D3NetworkGraph.js').then(m => ({ default: m.D3NetworkGraph })),
+);
+
+type ViewMode = 'tree' | 'network';
 
 function filterNode(
   node: CascadeNode,
@@ -46,6 +52,7 @@ export function CascadeTreePage() {
   const { activeCycle } = useCycle();
   const { tree, isLoading, error, refetch } = useCascadeTree(activeCycle?.id);
 
+  const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 250);
   const [statusFilter, setStatusFilter] = useState<ObjectiveStatus | ''>('');
@@ -69,10 +76,38 @@ export function CascadeTreePage() {
   return (
     <PageTransition className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="shrink-0">
-        <h2 className="text-2xl font-bold text-slate-100">Cascade View</h2>
-        <p className="mt-1 text-slate-400">
-          See how objectives cascade through the organisation.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-100">Cascade View</h2>
+            <p className="mt-1 text-slate-400">
+              See how objectives cascade through the organisation.
+            </p>
+          </div>
+
+          {/* View mode toggle */}
+          <div className="flex rounded-lg bg-surface-raised border border-slate-700 p-0.5">
+            <button
+              onClick={() => setViewMode('tree')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === 'tree'
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Tree
+            </button>
+            <button
+              onClick={() => setViewMode('network')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === 'network'
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Network
+            </button>
+          </div>
+        </div>
 
         {error && (
           <ErrorAlert
@@ -95,7 +130,17 @@ export function CascadeTreePage() {
       </div>
 
       <div className="mt-6 flex-1 min-h-0">
-        <D3CascadeTree nodes={filteredTree} />
+        {viewMode === 'tree' ? (
+          <D3CascadeTree nodes={filteredTree} />
+        ) : (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-full">
+              <LoadingSpinner />
+            </div>
+          }>
+            <D3NetworkGraph nodes={filteredTree} activeCycle={activeCycle} />
+          </Suspense>
+        )}
       </div>
     </PageTransition>
   );
