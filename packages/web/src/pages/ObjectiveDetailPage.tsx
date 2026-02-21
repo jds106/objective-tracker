@@ -9,7 +9,6 @@ import type {
   UpdateObjectiveBody,
 } from '@objective-tracker/shared';
 import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
-import { useAuth } from '../contexts/auth.context.js';
 import { useCycle } from '../contexts/cycle.context.js';
 import { useObjective } from '../hooks/useObjective.js';
 import { CascadeBreadcrumb } from '../components/CascadeBreadcrumb.js';
@@ -21,22 +20,26 @@ import { KeyResultFormModal } from '../components/key-results/KeyResultFormModal
 import { CheckInModal } from '../components/check-ins/CheckInModal.js';
 import { CheckInTimeline } from '../components/check-ins/CheckInTimeline.js';
 import { ObjectiveFormModal } from '../components/objectives/ObjectiveFormModal.js';
+import { ConfirmModal } from '../components/ConfirmModal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
+import { PageTransition } from '../components/PageTransition.js';
 import * as objectivesApi from '../services/objectives.api.js';
 import * as cascadeApi from '../services/cascade.api.js';
 
 export function ObjectiveDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { activeCycle } = useCycle();
-  const { objective, isLoading, error, refetch } = useObjective(id!);
+  const { objective, canEdit, isLoading, error, refetch } = useObjective(id!);
 
   const [cascadePath, setCascadePath] = useState<Objective[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddKR, setShowAddKR] = useState(false);
   const [editingKR, setEditingKR] = useState<KeyResult | null>(null);
   const [checkInKR, setCheckInKR] = useState<KeyResult | null>(null);
+  const [confirmDeleteObj, setConfirmDeleteObj] = useState(false);
+  const [confirmDeleteKR, setConfirmDeleteKR] = useState<KeyResult | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -70,7 +73,6 @@ export function ObjectiveDetailPage() {
   const progress = calculateObjectiveProgress(objective.keyResults.map(kr => kr.progress));
   const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
   const health = calculateHealthStatus(progress, activeCycle, allCheckIns);
-  const canEdit = objective.ownerId === user?.id;
 
   const handleEditObjective = async (input: UpdateObjectiveBody) => {
     await objectivesApi.updateObjective(objective.id, input as UpdateObjectiveBody);
@@ -89,10 +91,16 @@ export function ObjectiveDetailPage() {
     await refetch();
   };
 
-  const handleDeleteKR = async (kr: KeyResult) => {
-    if (!confirm(`Delete key result "${kr.title}"?`)) return;
-    await objectivesApi.deleteKeyResult(kr.id);
-    await refetch();
+  const handleDeleteKR = async () => {
+    if (!confirmDeleteKR) return;
+    setDeleteLoading(true);
+    try {
+      await objectivesApi.deleteKeyResult(confirmDeleteKR.id);
+      setConfirmDeleteKR(null);
+      await refetch();
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handleCheckIn = async (input: CheckInBody) => {
@@ -102,14 +110,19 @@ export function ObjectiveDetailPage() {
     await refetch();
   };
 
-  const handleDelete = async () => {
-    if (!confirm(`Delete objective "${objective.title}"? This cannot be undone.`)) return;
-    await objectivesApi.deleteObjective(objective.id);
-    navigate('/dashboard');
+  const handleDeleteObjective = async () => {
+    setDeleteLoading(true);
+    try {
+      await objectivesApi.deleteObjective(objective.id);
+      navigate('/dashboard');
+    } finally {
+      setDeleteLoading(false);
+      setConfirmDeleteObj(false);
+    }
   };
 
   return (
-    <div>
+    <PageTransition>
       {cascadePath.length > 1 && (
         <CascadeBreadcrumb path={cascadePath} className="mb-4" />
       )}
@@ -138,7 +151,7 @@ export function ObjectiveDetailPage() {
           </button>
           {objective.status === 'draft' && (
             <button
-              onClick={handleDelete}
+              onClick={() => setConfirmDeleteObj(true)}
               className="rounded-lg px-3 py-1.5 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors"
             >
               Delete
@@ -164,7 +177,7 @@ export function ObjectiveDetailPage() {
           canEdit={canEdit}
           onCheckIn={kr => setCheckInKR(kr)}
           onEdit={kr => setEditingKR(kr)}
-          onDelete={handleDeleteKR}
+          onDelete={kr => setConfirmDeleteKR(kr)}
         />
       </div>
 
@@ -178,6 +191,8 @@ export function ObjectiveDetailPage() {
           />
         </div>
       </div>
+
+      {/* ── Modals ─────────────────────────────────────────── */}
 
       {activeCycle && (
         <ObjectiveFormModal
@@ -213,6 +228,30 @@ export function ObjectiveDetailPage() {
           keyResult={checkInKR}
         />
       )}
-    </div>
+
+      {/* Confirm delete objective */}
+      <ConfirmModal
+        isOpen={confirmDeleteObj}
+        onClose={() => setConfirmDeleteObj(false)}
+        onConfirm={handleDeleteObjective}
+        title="Delete Objective"
+        message={`Delete "${objective.title}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        isLoading={deleteLoading}
+      />
+
+      {/* Confirm delete key result */}
+      <ConfirmModal
+        isOpen={!!confirmDeleteKR}
+        onClose={() => setConfirmDeleteKR(null)}
+        onConfirm={handleDeleteKR}
+        title="Delete Key Result"
+        message={confirmDeleteKR ? `Delete key result "${confirmDeleteKR.title}"?` : ''}
+        confirmLabel="Delete"
+        variant="danger"
+        isLoading={deleteLoading}
+      />
+    </PageTransition>
   );
 }

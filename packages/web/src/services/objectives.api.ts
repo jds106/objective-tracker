@@ -16,8 +16,13 @@ export function listMyObjectives(cycleId?: string): Promise<ApiResponse<Objectiv
   return apiClient.get(`/objectives${query}`);
 }
 
-export function getObjective(id: string): Promise<ApiResponse<Objective>> {
+export function getObjective(id: string): Promise<ApiResponse<Objective> & { canEdit?: boolean }> {
   return apiClient.get(`/objectives/${id}`);
+}
+
+export function getCompanyObjectives(cycleId?: string): Promise<ApiResponse<Objective[]>> {
+  const query = cycleId ? `?cycleId=${encodeURIComponent(cycleId)}` : '';
+  return apiClient.get(`/objectives/company${query}`);
 }
 
 export function createObjective(input: CreateObjectiveBody): Promise<ApiResponse<Objective>> {

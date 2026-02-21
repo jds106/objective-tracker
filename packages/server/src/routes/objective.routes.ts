@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createObjectiveSchema, updateObjectiveSchema } from '@objective-tracker/shared';
 import { createAuthMiddleware } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
+import { validateId } from '../middleware/validate-id.middleware.js';
 import type { RouteDependencies } from './index.js';
 
 export function createObjectiveRoutes(deps: RouteDependencies): Router {
@@ -18,6 +19,21 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
     }
   });
 
+  /** Company-level objectives — visible to all authenticated users */
+  router.get('/company', auth, async (req, res, next) => {
+    try {
+      const cycleId = req.query.cycleId as string | undefined;
+      const objectives = await deps.objectiveService.getByUserId('company', cycleId);
+      res.json({ data: objectives });
+    } catch (err) {
+      if ((err as { name?: string }).name === 'NotFoundError') {
+        res.json({ data: [] });
+        return;
+      }
+      next(err);
+    }
+  });
+
   router.post('/', auth, validate(createObjectiveSchema), async (req, res, next) => {
     try {
       const objective = await deps.objectiveService.create(req.user!.id, req.body);
@@ -27,7 +43,7 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
     }
   });
 
-  router.get('/:id', auth, async (req, res, next) => {
+  router.get('/:id', auth, validateId(), async (req, res, next) => {
     try {
       const objective = await deps.objectiveService.getById(req.params.id);
       const canView = await deps.visibilityService.canView(req.user!.id, objective.ownerId);
@@ -35,13 +51,14 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
         res.status(403).json({ error: 'You do not have visibility to this objective' });
         return;
       }
-      res.json({ data: objective });
+      const canEdit = await deps.visibilityService.canEdit(req.user!.id, objective.ownerId);
+      res.json({ data: objective, canEdit });
     } catch (err) {
       next(err);
     }
   });
 
-  router.put('/:id', auth, validate(updateObjectiveSchema), async (req, res, next) => {
+  router.put('/:id', auth, validateId(), validate(updateObjectiveSchema), async (req, res, next) => {
     try {
       const objective = await deps.objectiveService.getById(req.params.id);
       const canEdit = await deps.visibilityService.canEdit(req.user!.id, objective.ownerId);
@@ -56,7 +73,7 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
     }
   });
 
-  router.delete('/:id', auth, async (req, res, next) => {
+  router.delete('/:id', auth, validateId(), async (req, res, next) => {
     try {
       const objective = await deps.objectiveService.getById(req.params.id);
       const canEdit = await deps.visibilityService.canEdit(req.user!.id, objective.ownerId);
@@ -71,7 +88,7 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
     }
   });
 
-  router.get('/:id/cascade', auth, async (req, res, next) => {
+  router.get('/:id/cascade', auth, validateId(), async (req, res, next) => {
     try {
       const path = await deps.cascadeService.getCascadePath(req.params.id, req.user!.id);
       res.json({ data: path });

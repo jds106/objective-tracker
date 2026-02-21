@@ -4,6 +4,7 @@ import * as objectivesApi from '../services/objectives.api.js';
 
 export function useObjective(id: string) {
   const [objective, setObjective] = useState<Objective | null>(null);
+  const [canEdit, setCanEdit] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -11,8 +12,9 @@ export function useObjective(id: string) {
     try {
       setIsLoading(true);
       setError(null);
-      const { data } = await objectivesApi.getObjective(id);
-      setObjective(data);
+      const response = await objectivesApi.getObjective(id);
+      setObjective(response.data);
+      setCanEdit(response.canEdit ?? false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load objective');
     } finally {
@@ -22,5 +24,5 @@ export function useObjective(id: string) {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  return { objective, isLoading, error, refetch: fetch };
+  return { objective, canEdit, isLoading, error, refetch: fetch };
 }
