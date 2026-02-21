@@ -16,6 +16,7 @@ function testConfig(dataDir: string): Config {
     JWT_EXPIRY: '1h',
     FRONTEND_URL: 'http://localhost:5173',
     BCRYPT_SALT_ROUNDS: 4,
+    ANTHROPIC_MODEL: 'claude-sonnet-4-20250514',
   };
 }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import type {
   Objective,
   KeyResult,
@@ -25,6 +26,7 @@ import { ConfirmModal } from '../components/ConfirmModal.js';
 import { Modal } from '../components/Modal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
 import { PageTransition } from '../components/PageTransition.js';
+import { Confetti, useCelebration } from '../components/Confetti.js';
 import * as objectivesApi from '../services/objectives.api.js';
 import * as cascadeApi from '../services/cascade.api.js';
 import * as aiApi from '../services/ai.api.js';
@@ -32,15 +34,18 @@ import * as aiApi from '../services/ai.api.js';
 export function ObjectiveDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { activeCycle, allCycles } = useCycle();
+  const { activeCycle, selectedCycle, allCycles } = useCycle();
   const { objective, canEdit, isLoading, error, refetch } = useObjective(id ?? '');
 
+  const [celebrating, triggerCelebration] = useCelebration();
   const [cascadePath, setCascadePath] = useState<Objective[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddKR, setShowAddKR] = useState(false);
   const [editingKR, setEditingKR] = useState<KeyResult | null>(null);
   const [checkInKR, setCheckInKR] = useState<KeyResult | null>(null);
   const [confirmDeleteObj, setConfirmDeleteObj] = useState(false);
+  const [confirmDeleteForce, setConfirmDeleteForce] = useState(false);
+  const [linkedChildrenWarning, setLinkedChildrenWarning] = useState<Array<{ id: string; title: string }>>([]);
   const [confirmDeleteKR, setConfirmDeleteKR] = useState<KeyResult | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showRollforward, setShowRollforward] = useState(false);
@@ -88,7 +93,7 @@ export function ObjectiveDetailPage() {
 
   const progress = calculateObjectiveProgress(objective.keyResults.map(kr => kr.progress));
   const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
-  const health = calculateHealthStatus(progress, activeCycle, allCheckIns);
+  const health = calculateHealthStatus(progress, selectedCycle, allCheckIns);
 
   const handleEditObjective = async (input: UpdateObjectiveBody) => {
     setActionError(null);
@@ -144,26 +149,42 @@ export function ObjectiveDetailPage() {
     if (!checkInKR) return;
     setActionError(null);
     try {
-      await objectivesApi.recordCheckIn(checkInKR.id, input);
+      const { data: checkIn } = await objectivesApi.recordCheckIn(checkInKR.id, input);
       setCheckInKR(null);
       await refetch();
+      // Celebrate if this KR reached 100%
+      if (checkIn.newProgress >= 100) {
+        triggerCelebration();
+      }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to record check-in');
       throw err;
     }
   };
 
-  const handleDeleteObjective = async () => {
+  const handleDeleteObjective = async (force = false) => {
     setDeleteLoading(true);
     setActionError(null);
     try {
-      await objectivesApi.deleteObjective(objective.id);
+      await objectivesApi.deleteObjective(objective.id, force);
       navigate('/dashboard');
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to delete objective');
+      // Check if this is a linked-children 409 error
+      const errMsg = err instanceof Error ? err.message : 'Failed to delete objective';
+      if (errMsg.includes('linked child')) {
+        setConfirmDeleteObj(false);
+        // Extract linked children from ApiError details
+        const apiErr = err as Error & { details?: { linkedChildren?: Array<{ id: string; title: string }> } };
+        setLinkedChildrenWarning(apiErr.details?.linkedChildren ?? []);
+        setConfirmDeleteForce(true);
+      } else {
+        setActionError(errMsg);
+      }
     } finally {
       setDeleteLoading(false);
-      setConfirmDeleteObj(false);
+      if (!confirmDeleteForce) {
+        setConfirmDeleteObj(false);
+      }
     }
   };
 
@@ -206,6 +227,25 @@ export function ObjectiveDetailPage() {
 
   return (
     <PageTransition>
+      <Confetti active={celebrating} />
+
+      {/* Back navigation + cascade breadcrumb */}
+      <div className="mb-4 flex items-center gap-3 text-sm">
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors shrink-0"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Back
+        </button>
+        <span className="text-slate-600">|</span>
+        <Link to="/dashboard" className="text-slate-400 hover:text-slate-200 transition-colors">
+          Dashboard
+        </Link>
+        <span className="text-slate-600">&rsaquo;</span>
+        <span className="text-slate-300 truncate">{objective.title}</span>
+      </div>
+
       {cascadePath.length > 1 && (
         <CascadeBreadcrumb path={cascadePath} className="mb-4" />
       )}
@@ -419,13 +459,54 @@ export function ObjectiveDetailPage() {
       <ConfirmModal
         isOpen={confirmDeleteObj}
         onClose={() => setConfirmDeleteObj(false)}
-        onConfirm={handleDeleteObjective}
+        onConfirm={() => handleDeleteObjective(false)}
         title="Delete Objective"
         message={`Delete "${objective.title}"? This cannot be undone.`}
         confirmLabel="Delete"
         variant="danger"
         isLoading={deleteLoading}
       />
+
+      {/* Force delete — linked children warning */}
+      <Modal
+        isOpen={confirmDeleteForce}
+        onClose={() => { setConfirmDeleteForce(false); setLinkedChildrenWarning([]); }}
+        title="Linked Objectives Found"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-amber-300">
+            This objective has {linkedChildrenWarning.length} linked child objective{linkedChildrenWarning.length !== 1 ? 's' : ''} that cascade from it.
+            Deleting will unlink them.
+          </p>
+          {linkedChildrenWarning.length > 0 && (
+            <ul className="space-y-1 rounded-lg bg-surface p-3">
+              {linkedChildrenWarning.map(child => (
+                <li key={child.id} className="text-xs text-slate-300">
+                  &bull; {child.title}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => { setConfirmDeleteForce(false); setLinkedChildrenWarning([]); }}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setConfirmDeleteForce(false);
+                handleDeleteObjective(true);
+              }}
+              disabled={deleteLoading}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+            >
+              {deleteLoading ? 'Deleting…' : 'Delete and Unlink'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Confirm delete key result */}
       <ConfirmModal

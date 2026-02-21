@@ -81,9 +81,16 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
         res.status(403).json({ error: 'You do not have permission to delete this objective' });
         return;
       }
-      await deps.objectiveService.delete(req.params.id);
+      const force = req.query.force === 'true';
+      await deps.objectiveService.delete(req.params.id, force);
       res.status(204).send();
     } catch (err) {
+      // Return linked children info for 409 conflict
+      if (err instanceof Error && err.message.includes('linked child')) {
+        const linkedChildren = (err as Error & { linkedChildren?: unknown[] }).linkedChildren;
+        res.status(409).json({ error: err.message, linkedChildren });
+        return;
+      }
       next(err);
     }
   });

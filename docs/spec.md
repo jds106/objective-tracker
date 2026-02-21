@@ -40,6 +40,12 @@ The structure must be flexible — people move teams, new levels can be introduc
 
 **Authentication (MVP)**: Username (email) and password with bcrypt hashing and JWT tokens. The auth layer must be abstracted behind an interface so it can be replaced with SSO (Okta, Azure AD, etc.) in future without touching application code.
 
+**Security middleware**:
+- **CORS**: Restricted to allowed origins via `ALLOWED_ORIGINS` env var (comma-separated). Falls back to `FRONTEND_URL` if not set. Credentials enabled.
+- **Rate limiting** (via `express-rate-limit`): Login — 10 attempts per 15 minutes per IP. Registration — 5 per hour. Password reset — 3 per hour. Returns 429 with `Retry-After` header.
+- **Helmet**: Standard security headers including CSP.
+- **Token persistence**: JWT blacklist and password reset tokens are persisted to JSON files (`data/token-blacklist.json`, `data/reset-tokens.json`) with debounced writes, surviving server restarts. Expired tokens are cleaned up on load.
+
 ```typescript
 interface AuthProvider {
   authenticate(credentials: unknown): Promise<AuthResult>;
@@ -302,6 +308,8 @@ The UI must be **beautiful and engaging**. This is not an enterprise admin tool 
 - **Micro-interactions** — satisfying progress updates, subtle celebrations when objectives are completed. A confetti animation fires when a key result reaches 100% progress during a check-in, or when all check-ins succeed on the bulk check-in page.
 - **Mobile-responsive** — check-ins should work well on a phone
 - **Password strength indicator** — the registration form includes an animated strength meter (weak/fair/strong/very strong) with contextual hints for improvement.
+- **Keyboard accessible** — global focus-visible indicators (indigo ring), "Skip to content" link, arrow key navigation in sidebar, `aria-current="page"` on active nav links, ARIA landmarks on sidebar and main content.
+- **Page transitions** — `AnimatePresence` with `mode="wait"` wraps route outlets for smooth 150ms cross-fade between pages. Individual pages use `PageTransition` for entrance/exit animations (250ms fade + slide).
 
 ### 5.3 Key Views
 
@@ -320,7 +328,7 @@ The user's personal dashboard showing:
 - **My Objectives**: Cards for each active objective with progress rings/bars
 - **Overall Completion**: An aggregated progress metric across all objectives
 - **Upcoming Check-ins**: When the next check-in is due
-- **Recent Activity**: Latest check-ins from the user and their team
+- **Recent Activity**: Latest check-ins with source icons (🌐 Web, 💬 Slack, 🤖 MCP), "View all" expansion showing up to 20 items with objective attribution
 - **Stale KR Nudges**: Time-based nudges for key results that haven't received a check-in in 14+ days. Sorted by staleness (most stale first), limited to the top 5 items. Each nudge links to the parent objective's detail page. Hidden when viewing a historical cycle.
 - **AI Nudges** (when AI is enabled): AI-generated suggestions for improving objective quality or alignment
 
@@ -380,10 +388,11 @@ For managers, a view of their direct reports' objectives. Only visible in the si
 
 Accessible only to users with `role: 'admin'` (see §2.3). The admin panel provides:
 
-- **User management**: List all users, search, update role/department/manager, delete users, trigger password resets
+- **User management**: List all users (paginated, 25 per page) with search, update role/department/manager, delete users, trigger password resets
 - **Company objectives**: Create and manage root-level company objectives that sit at the top of the cascade
+- **User objectives**: Paginated list (25 per page) with search by title, owner, or status
 - **Cycle management**: Create/edit annual cycles and quarters
-- **Org structure management**: Manual adjustments to reporting lines
+- **Org structure management**: Manual adjustments to reporting lines, interactive tree view
 - **Workday CSV import**: Upload and map columns to build the org tree
 
 #### 5.3.7 Profile Page

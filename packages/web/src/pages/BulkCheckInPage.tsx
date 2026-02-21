@@ -5,6 +5,7 @@ import { useCycle } from '../contexts/cycle.context.js';
 import { useObjectives } from '../hooks/useObjectives.js';
 import { useBulkCheckIn } from '../hooks/useBulkCheckIn.js';
 import { BulkCheckInObjectiveGroup } from '../components/check-ins/BulkCheckInObjectiveGroup.js';
+import { Confetti } from '../components/Confetti.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorAlert } from '../components/ErrorAlert.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
@@ -50,6 +51,8 @@ export function BulkCheckInPage() {
 
   return (
     <PageTransition>
+      <Confetti active={allSucceeded} />
+
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-3xl font-bold tracking-tight text-slate-100">

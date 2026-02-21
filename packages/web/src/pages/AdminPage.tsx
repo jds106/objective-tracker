@@ -934,18 +934,53 @@ function ObjectivesTab() {
         setEditingObjective(null);
     };
 
-    const handleDeleteObjective = async (objective: Objective) => {
+    const handleDeleteObjective = async (objective: Objective, force = false) => {
         try {
-            await objectivesApi.deleteObjective(objective.id);
+            await objectivesApi.deleteObjective(objective.id, force);
             setObjectives(prev => prev.filter(o => o.id !== objective.id));
             setDeleteObjectiveConfirm(null);
         } catch (err) {
-            setError(getErrorMessage(err, 'Failed to delete objective'));
+            const msg = getErrorMessage(err, 'Failed to delete objective');
+            if (msg.includes('linked child') && !force) {
+                // Retry with force for admin
+                if (confirm(`${msg}\n\nDo you want to delete it anyway and unlink the children?`)) {
+                    return handleDeleteObjective(objective, true);
+                }
+                setDeleteObjectiveConfirm(null);
+            } else {
+                setError(msg);
+            }
         }
     };
 
+    const [objSearch, setObjSearch] = useState('');
+    const [objPage, setObjPage] = useState(1);
+    const OBJ_PAGE_SIZE = 25;
+
     const companyObjectives = objectives.filter(o => o.ownerId === 'company');
-    const userObjectives = objectives.filter(o => o.ownerId !== 'company');
+    const allUserObjectives = objectives.filter(o => o.ownerId !== 'company');
+
+    // Client-side search and pagination for user objectives
+    const filteredUserObjectives = useMemo(() => {
+        if (!objSearch.trim()) return allUserObjectives;
+        const q = objSearch.toLowerCase();
+        return allUserObjectives.filter(obj => {
+            const owner = userMap.get(obj.ownerId);
+            return obj.title.toLowerCase().includes(q)
+                || (owner?.displayName?.toLowerCase().includes(q) ?? false)
+                || obj.status.toLowerCase().includes(q);
+        });
+    }, [allUserObjectives, objSearch, userMap]);
+
+    const objTotalPages = Math.max(1, Math.ceil(filteredUserObjectives.length / OBJ_PAGE_SIZE));
+    const safeObjPage = Math.min(objPage, objTotalPages);
+    const paginatedObjectives = filteredUserObjectives.slice(
+        (safeObjPage - 1) * OBJ_PAGE_SIZE,
+        safeObjPage * OBJ_PAGE_SIZE,
+    );
+
+    // Reset to page 1 when search changes
+    useEffect(() => { setObjPage(1); }, [objSearch]);
 
     if (isLoading) return <div className="flex justify-center py-12"><LoadingSpinner /></div>;
 
@@ -994,18 +1029,27 @@ function ObjectivesTab() {
 
             {/* All User Objectives Section */}
             <div>
-                <h3 className="text-lg font-semibold text-slate-100 mb-4">
-                    All User Objectives
-                    <span className="text-sm font-normal text-slate-500 ml-2">({userObjectives.length})</span>
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-100">
+                        All User Objectives
+                        <span className="text-sm font-normal text-slate-500 ml-2">({filteredUserObjectives.length})</span>
+                    </h3>
+                    <input
+                        type="text"
+                        placeholder="Search objectives…"
+                        value={objSearch}
+                        onChange={e => setObjSearch(e.target.value)}
+                        className="rounded-lg bg-surface border border-slate-700 px-3 py-1.5 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none w-64"
+                    />
+                </div>
 
-                {userObjectives.length === 0 ? (
+                {paginatedObjectives.length === 0 ? (
                     <div className="rounded-xl bg-surface-raised border border-slate-700 p-8 text-center text-slate-500">
-                        No user objectives found for the current cycle.
+                        {objSearch ? 'No objectives match your search.' : 'No user objectives found for the current cycle.'}
                     </div>
                 ) : (
                     <div className="grid gap-3">
-                        {userObjectives.map(obj => (
+                        {paginatedObjectives.map(obj => (
                             <ObjectiveRow
                                 key={obj.id}
                                 objective={obj}
@@ -1014,6 +1058,34 @@ function ObjectivesTab() {
                                 onDelete={() => setDeleteObjectiveConfirm(obj)}
                             />
                         ))}
+                    </div>
+                )}
+
+                {/* Pagination controls */}
+                {objTotalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 text-sm text-slate-400">
+                        <span>
+                            Showing {(safeObjPage - 1) * OBJ_PAGE_SIZE + 1}–{Math.min(safeObjPage * OBJ_PAGE_SIZE, filteredUserObjectives.length)} of {filteredUserObjectives.length}
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setObjPage(p => Math.max(1, p - 1))}
+                                disabled={safeObjPage <= 1}
+                                className="rounded-lg px-3 py-1 bg-surface-raised border border-slate-700 hover:border-slate-600 disabled:opacity-40 transition-colors"
+                            >
+                                ← Prev
+                            </button>
+                            <span className="flex items-center px-2">
+                                Page {safeObjPage} of {objTotalPages}
+                            </span>
+                            <button
+                                onClick={() => setObjPage(p => Math.min(objTotalPages, p + 1))}
+                                disabled={safeObjPage >= objTotalPages}
+                                className="rounded-lg px-3 py-1 bg-surface-raised border border-slate-700 hover:border-slate-600 disabled:opacity-40 transition-colors"
+                            >
+                                Next →
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

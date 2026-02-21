@@ -3,14 +3,67 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-surface text-slate-100 antialiased;
+  /* ── Theme variables ─────────────────────────────────────── */
+  :root {
+    --color-surface: 15 23 42;         /* slate-900 */
+    --color-surface-raised: 30 41 59;  /* slate-800 */
+    --color-surface-overlay: 51 65 85; /* slate-700 */
+    --color-text-primary: 241 245 249; /* slate-100 */
+    --color-text-secondary: 148 163 184; /* slate-400 */
+    --color-text-muted: 100 116 139;   /* slate-500 */
+    --color-border: 51 65 85;          /* slate-700 */
+    --scrollbar-thumb: #334155;
+    --scrollbar-thumb-hover: #475569;
+    color-scheme: dark;
   }
 
-  /* Custom dark-mode scrollbars */
+  .light {
+    --color-surface: 248 250 252;       /* slate-50 */
+    --color-surface-raised: 255 255 255; /* white */
+    --color-surface-overlay: 241 245 249; /* slate-100 */
+    --color-text-primary: 15 23 42;     /* slate-900 */
+    --color-text-secondary: 71 85 105;  /* slate-600 */
+    --color-text-muted: 100 116 139;    /* slate-500 */
+    --color-border: 226 232 240;        /* slate-200 */
+    --scrollbar-thumb: #cbd5e1;
+    --scrollbar-thumb-hover: #94a3b8;
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-surface text-primary antialiased;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* ── Keyboard focus indicators ─────────────────────────── */
+
+  /* Remove the default outline on mouse click (focus) but keep it for keyboard (focus-visible) */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Visible, consistent focus ring for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid rgb(99 102 241); /* indigo-500 */
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ── Skip to content link ──────────────────────────────── */
+  .skip-to-content {
+    @apply absolute left-4 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium z-[100];
+    top: -100%;
+    transition: top 0.2s ease;
+  }
+
+  .skip-to-content:focus {
+    top: 1rem;
+  }
+
+  /* Custom scrollbars */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #334155 transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
@@ -22,11 +75,11 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: #334155;
+    background: var(--scrollbar-thumb);
     border-radius: 3px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: #475569;
+    background: var(--scrollbar-thumb-hover);
   }
 }

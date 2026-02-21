@@ -10,16 +10,28 @@ export default {
       },
       colors: {
         surface: {
-          DEFAULT: '#0f172a',
-          raised: '#1e293b',
-          overlay: '#334155',
+          DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
+          raised: 'rgb(var(--color-surface-raised) / <alpha-value>)',
+          overlay: 'rgb(var(--color-surface-overlay) / <alpha-value>)',
         },
+        primary: 'rgb(var(--color-text-primary) / <alpha-value>)',
+        secondary: 'rgb(var(--color-text-secondary) / <alpha-value>)',
+        muted: 'rgb(var(--color-text-muted) / <alpha-value>)',
+        border: 'rgb(var(--color-border) / <alpha-value>)',
         health: {
           'on-track': '#10b981',
           'at-risk': '#f59e0b',
           behind: '#ef4444',
           'not-started': '#64748b',
         },
+      },
+      textColor: {
+        primary: 'rgb(var(--color-text-primary) / <alpha-value>)',
+        secondary: 'rgb(var(--color-text-secondary) / <alpha-value>)',
+        muted: 'rgb(var(--color-text-muted) / <alpha-value>)',
+      },
+      borderColor: {
+        DEFAULT: 'rgb(var(--color-border) / <alpha-value>)',
       },
       keyframes: {
         'slide-in-left': {

@@ -1,4 +1,5 @@
 import { useState, useMemo, lazy, Suspense } from 'react';
+import { ShareIcon } from '@heroicons/react/24/outline';
 import type { ObjectiveStatus, HealthStatus, Cycle } from '@objective-tracker/shared';
 import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
 import { useCycle } from '../contexts/cycle.context.js';
@@ -6,6 +7,7 @@ import { useCascadeTree } from '../hooks/useCascadeTree.js';
 import { useDebounce } from '../hooks/useDebounce.js';
 import { D3CascadeTree } from '../components/cascade/D3CascadeTree.js';
 import { CascadeFilters } from '../components/cascade/CascadeFilters.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { ErrorAlert } from '../components/ErrorAlert.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
 import { PageTransition } from '../components/PageTransition.js';
@@ -49,8 +51,8 @@ function filterNode(
 }
 
 export function CascadeTreePage() {
-  const { activeCycle } = useCycle();
-  const { tree, isLoading, error, refetch } = useCascadeTree(activeCycle?.id);
+  const { selectedCycle } = useCycle();
+  const { tree, isLoading, error, refetch } = useCascadeTree(selectedCycle?.id);
 
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const [search, setSearch] = useState('');
@@ -61,9 +63,9 @@ export function CascadeTreePage() {
   const filteredTree = useMemo(() => {
     if (!debouncedSearch && !statusFilter && !healthFilter) return tree;
     return tree
-      .map(node => filterNode(node, debouncedSearch, statusFilter, healthFilter, activeCycle))
+      .map(node => filterNode(node, debouncedSearch, statusFilter, healthFilter, selectedCycle))
       .filter((n): n is CascadeNode => n !== null);
-  }, [tree, debouncedSearch, statusFilter, healthFilter, activeCycle]);
+  }, [tree, debouncedSearch, statusFilter, healthFilter, selectedCycle]);
 
   if (isLoading) {
     return (
@@ -130,7 +132,27 @@ export function CascadeTreePage() {
       </div>
 
       <div className="mt-6 flex-1 min-h-0">
-        {viewMode === 'tree' ? (
+        {filteredTree.length === 0 ? (
+          <EmptyState
+            icon={<ShareIcon className="h-12 w-12" />}
+            title={tree.length === 0 ? 'No objectives in this cycle yet' : 'No matching objectives'}
+            description={
+              tree.length === 0
+                ? 'Once objectives are created and linked, the cascade view will show how goals flow through the organisation.'
+                : 'Try adjusting your search or filters to find what you\'re looking for.'
+            }
+            action={
+              tree.length > 0 ? (
+                <button
+                  onClick={() => { setSearch(''); setStatusFilter(''); setHealthFilter(''); }}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              ) : undefined
+            }
+          />
+        ) : viewMode === 'tree' ? (
           <D3CascadeTree nodes={filteredTree} />
         ) : (
           <Suspense fallback={
@@ -138,7 +160,7 @@ export function CascadeTreePage() {
               <LoadingSpinner />
             </div>
           }>
-            <D3NetworkGraph nodes={filteredTree} activeCycle={activeCycle} />
+            <D3NetworkGraph nodes={filteredTree} activeCycle={selectedCycle} />
           </Suspense>
         )}
       </div>

@@ -10,10 +10,10 @@ interface CascadeTreeNodeProps {
 }
 
 export function CascadeTreeNode({ node }: CascadeTreeNodeProps) {
-  const { activeCycle } = useCycle();
+  const { selectedCycle } = useCycle();
   const progress = calculateObjectiveProgress(node.objective.keyResults.map(kr => kr.progress));
   const allCheckIns = node.objective.keyResults.flatMap(kr => kr.checkIns);
-  const health = calculateHealthStatus(progress, activeCycle, allCheckIns);
+  const health = calculateHealthStatus(progress, selectedCycle, allCheckIns);
 
   return (
     <Link

@@ -41,8 +41,11 @@ export async function createApp(config: Config): Promise<Express> {
     },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }));
+  const allowedOrigins = config.ALLOWED_ORIGINS
+    ? config.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : [config.FRONTEND_URL];
   app.use(cors({
-    origin: config.FRONTEND_URL,
+    origin: allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins,
     credentials: true,
   }));
 
@@ -67,9 +70,10 @@ export async function createApp(config: Config): Promise<Express> {
   await keyResultRepo.init();
   await cycleRepo.init();
 
-  // Initialise auth
+  // Initialise auth (with file-based token persistence)
   const jwtService = new JwtService(config);
-  const tokenBlacklist = new TokenBlacklist();
+  const tokenBlacklist = new TokenBlacklist(join(config.DATA_DIR, 'token-blacklist.json'));
+  await tokenBlacklist.load();
   const authProvider = new PasswordAuthProvider(userRepo, jwtService, tokenBlacklist, config.BCRYPT_SALT_ROUNDS);
 
   // Initialise services
@@ -81,7 +85,11 @@ export async function createApp(config: Config): Promise<Express> {
   const cycleService = new CycleService(cycleRepo);
   const cascadeService = new CascadeService(userRepo, objectiveRepo, visibilityService);
   const notificationService = new ConsoleNotificationService(config.FRONTEND_URL);
-  const passwordResetService = new PasswordResetService(userRepo, notificationService, config.BCRYPT_SALT_ROUNDS);
+  const passwordResetService = new PasswordResetService(
+    userRepo, notificationService, config.BCRYPT_SALT_ROUNDS,
+    join(config.DATA_DIR, 'reset-tokens.json'),
+  );
+  await passwordResetService.load();
 
   // Initialise AI service (optional — only if API key is configured)
   const aiService = config.ANTHROPIC_API_KEY

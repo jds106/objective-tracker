@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/auth.context.js';
+import { PasswordStrength } from '../components/PasswordStrength.js';
 import { getErrorMessage } from '../utils/error.js';
 
 export function RegisterPage() {
@@ -159,7 +160,7 @@ export function RegisterPage() {
               className="mt-1 block w-full rounded-lg border border-slate-600 bg-surface px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:shadow-sm focus:shadow-indigo-500/20"
               placeholder="••••••••"
             />
-            <p id="password-hint" className="mt-1 text-xs text-slate-500">At least 8 characters</p>
+            <PasswordStrength password={form.password} className="mt-2" />
           </div>
 
           <div>

@@ -48,7 +48,9 @@ export function CheckInTimeline({ checkIns }: CheckInTimelineProps) {
                       ({diff > 0 ? '+' : ''}{Math.round(diff)}%)
                     </span>
                   )}
-                  <span className="text-xs text-slate-500 capitalize">{ci.source}</span>
+                  <span className="text-xs text-slate-500" title={`Checked in via ${ci.source}`}>
+                    {ci.source === 'web' ? '🌐' : ci.source === 'slack' ? '💬' : ci.source === 'mcp' ? '🤖' : ci.source}
+                  </span>
                 </div>
                 {ci.note && (
                   <p className="mt-1 text-sm text-slate-400">{ci.note}</p>

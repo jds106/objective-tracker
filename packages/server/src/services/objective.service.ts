@@ -46,12 +46,44 @@ export class ObjectiveService {
     return this.objectiveRepo.update(id, updates);
   }
 
-  async delete(id: string): Promise<void> {
+  /**
+   * Find objectives whose `parentObjectiveId` is the given ID.
+   * Requires the repo to support `getAll()`.
+   */
+  async getLinkedChildren(objectiveId: string): Promise<Objective[]> {
+    if (!this.objectiveRepo.getAll) return [];
+    const all = await this.objectiveRepo.getAll();
+    return all.filter(o => o.parentObjectiveId === objectiveId);
+  }
+
+  async delete(id: string, force = false): Promise<void> {
     const objective = await this.objectiveRepo.getById(id);
     if (!objective) throw new NotFoundError('Objective not found');
     if (objective.status !== 'draft') {
       throw new ValidationError('Only draft objectives can be deleted');
     }
+
+    // Check for linked children
+    if (!force) {
+      const children = await this.getLinkedChildren(id);
+      if (children.length > 0) {
+        const err = new ValidationError(
+          `This objective has ${children.length} linked child objective${children.length !== 1 ? 's' : ''}. Use force=true to delete anyway.`,
+        );
+        (err as ValidationError & { linkedChildren: Array<{ id: string; title: string; ownerId: string }> }).linkedChildren =
+          children.map(c => ({ id: c.id, title: c.title, ownerId: c.ownerId }));
+        throw err;
+      }
+    }
+
+    // If force-deleting, unlink children first
+    if (force) {
+      const children = await this.getLinkedChildren(id);
+      for (const child of children) {
+        await this.objectiveRepo.update(child.id, { parentObjectiveId: null });
+      }
+    }
+
     return this.objectiveRepo.delete(id);
   }
 

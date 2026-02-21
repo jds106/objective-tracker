@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/auth.context.js';
 import { CycleProvider } from './contexts/cycle.context.js';
 import { ReportsProvider, useReports } from './contexts/reports.context.js';
+import { ThemeProvider } from './contexts/theme.context.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { Layout } from './components/Layout.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
@@ -46,6 +47,7 @@ function ManagerGuard({ children }: { children: React.ReactNode }) {
 export function App() {
   return (
     <ErrorBoundary>
+      <ThemeProvider>
       <BrowserRouter>
         <AuthProvider>
           <Suspense fallback={<PageLoader />}>
@@ -111,6 +113,7 @@ export function App() {
           </Suspense>
         </AuthProvider>
       </BrowserRouter>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

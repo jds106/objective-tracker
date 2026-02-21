@@ -19,7 +19,7 @@ const healthBorderColours: Record<HealthStatus, string> = {
 };
 
 export const ObjectiveCard = memo(function ObjectiveCard({ objective }: ObjectiveCardProps) {
-  const { activeCycle } = useCycle();
+  const { selectedCycle } = useCycle();
 
   const progress = useMemo(
     () => calculateObjectiveProgress(objective.keyResults.map(kr => kr.progress)),
@@ -28,8 +28,8 @@ export const ObjectiveCard = memo(function ObjectiveCard({ objective }: Objectiv
 
   const health = useMemo(() => {
     const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
-    return calculateHealthStatus(progress, activeCycle, allCheckIns);
-  }, [objective.keyResults, progress, activeCycle]);
+    return calculateHealthStatus(progress, selectedCycle, allCheckIns);
+  }, [objective.keyResults, progress, selectedCycle]);
 
   return (
     <Link

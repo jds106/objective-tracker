@@ -33,8 +33,9 @@ export function updateObjective(id: string, input: UpdateObjectiveBody): Promise
   return apiClient.put(`/objectives/${id}`, input);
 }
 
-export function deleteObjective(id: string): Promise<void> {
-  return apiClient.delete(`/objectives/${id}`);
+export function deleteObjective(id: string, force = false): Promise<void> {
+  const query = force ? '?force=true' : '';
+  return apiClient.delete(`/objectives/${id}${query}`);
 }
 
 export function createKeyResult(objectiveId: string, input: CreateKeyResultBody): Promise<ApiResponse<KeyResult>> {

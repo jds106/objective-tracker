@@ -1,11 +1,8 @@
-import type { ApiResponse, Objective } from '@objective-tracker/shared';
+import type { ApiResponse, Objective, CascadeNode } from '@objective-tracker/shared';
 import { apiClient } from './api-client.js';
 
-export interface CascadeNode {
-  objective: Objective;
-  owner: { id: string; displayName: string; jobTitle: string; level: number; avatarUrl?: string };
-  children: CascadeNode[];
-}
+// Re-export CascadeNode so existing imports from this file still work
+export type { CascadeNode } from '@objective-tracker/shared';
 
 export function getCascadeTree(cycleId?: string): Promise<ApiResponse<CascadeNode[]>> {
   const query = cycleId ? `?cycleId=${encodeURIComponent(cycleId)}` : '';

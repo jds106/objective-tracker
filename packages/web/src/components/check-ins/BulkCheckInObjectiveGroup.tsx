@@ -33,7 +33,7 @@ export function BulkCheckInObjectiveGroup({
   onConfigChange,
   onNoteChange,
 }: BulkCheckInObjectiveGroupProps) {
-  const { activeCycle } = useCycle();
+  const { selectedCycle } = useCycle();
 
   // Calculate live progress from edited configs
   const liveKrProgresses = objective.keyResults.map(kr => {
@@ -44,7 +44,7 @@ export function BulkCheckInObjectiveGroup({
 
   // Calculate live health status
   const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
-  const health = calculateHealthStatus(liveProgress, activeCycle, allCheckIns);
+  const health = calculateHealthStatus(liveProgress, selectedCycle, allCheckIns);
 
   return (
     <div className="rounded-xl bg-surface-raised border border-slate-700 overflow-hidden">

@@ -35,6 +35,7 @@ export {
   ForbiddenError,
   ConcurrencyError,
 } from './errors.js';
+export type { CascadeNode, CascadeNodeOwner } from './cascade.js';
 export type {
   AiReviewResult,
   AiSuggestion,

@@ -45,7 +45,7 @@ class ApiClient {
       if (response.status === 401 && this.onUnauthorised) {
         this.onUnauthorised();
       }
-      throw new ApiError(response.status, body.error ?? 'Request failed', body.details);
+      throw new ApiError(response.status, body.error ?? 'Request failed', body.details ?? body);
     }
 
     if (response.status === 204) return undefined as T;

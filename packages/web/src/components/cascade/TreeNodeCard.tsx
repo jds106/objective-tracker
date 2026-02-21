@@ -51,11 +51,11 @@ function getNodeClasses(depth: number): { bg: string; titleClass: string; ringSi
 
 export function TreeNodeCard({ node, x, y, width, height, depth, childCount, isExpanded, onToggle }: TreeNodeCardProps) {
   const navigate = useNavigate();
-  const { activeCycle } = useCycle();
+  const { selectedCycle } = useCycle();
 
   const progress = calculateObjectiveProgress(node.objective.keyResults.map(kr => kr.progress));
   const allCheckIns = node.objective.keyResults.flatMap(kr => kr.checkIns);
-  const health = calculateHealthStatus(progress, activeCycle, allCheckIns);
+  const health = calculateHealthStatus(progress, selectedCycle, allCheckIns);
   const { bg, titleClass, ringSize } = getNodeClasses(depth);
   const hasChildren = childCount > 0;
 

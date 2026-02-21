@@ -1,4 +1,5 @@
 import { UserGroupIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../contexts/auth.context.js';
 import { useCycle } from '../contexts/cycle.context.js';
 import { useReports } from '../hooks/useReports.js';
 import { useObjectives } from '../hooks/useObjectives.js';
@@ -11,10 +12,11 @@ import { EmptyState } from '../components/EmptyState.js';
 import { PageTransition } from '../components/PageTransition.js';
 
 export function TeamPage() {
-  const { activeCycle } = useCycle();
+  const { isAdmin } = useAuth();
+  const { selectedCycle } = useCycle();
   const { reports, isLoading: reportsLoading, error: reportsError } = useReports();
-  const { objectives: myObjectives } = useObjectives(activeCycle?.id);
-  const { reportData, isLoading: teamLoading, error: teamError } = useTeamData(reports, activeCycle?.id);
+  const { objectives: myObjectives } = useObjectives(selectedCycle?.id);
+  const { reportData, isLoading: teamLoading, error: teamError } = useTeamData(reports, selectedCycle?.id);
 
   const isLoading = reportsLoading || teamLoading;
   const error = reportsError || teamError;
@@ -29,13 +31,19 @@ export function TeamPage() {
 
   if (reports.length === 0) {
     return (
-      <EmptyState
-        icon={
-          <UserGroupIcon className="h-12 w-12" />
-        }
-        title="No direct reports"
-        description="You don't have any direct reports in the organisation."
-      />
+      <PageTransition>
+        <EmptyState
+          icon={
+            <UserGroupIcon className="h-12 w-12" />
+          }
+          title="No direct reports"
+          description={
+            isAdmin
+              ? "You don't have any direct reports yet. Go to the Admin panel to assign team members to your reporting line."
+              : "You don't have any direct reports in the organisation. Ask your administrator to update the org structure if this doesn't look right."
+          }
+        />
+      </PageTransition>
     );
   }
 
@@ -71,7 +79,7 @@ export function TeamPage() {
             key={rd.user.id}
             user={rd.user}
             objectives={rd.objectives}
-            cycle={activeCycle}
+            cycle={selectedCycle}
           />
         ))}
       </div>
