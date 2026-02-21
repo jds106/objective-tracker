@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { User, Objective, Cycle, CycleStatus, UpdateObjectiveBody } from '@objective-tracker/shared';
+import { useAuth } from '../contexts/auth.context.js';
 import { useCycle } from '../contexts/cycle.context.js';
 import { Modal } from '../components/Modal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
@@ -9,9 +10,17 @@ import { getErrorMessage } from '../utils/error.js';
 import * as adminApi from '../services/admin.api.js';
 import * as objectivesApi from '../services/objectives.api.js';
 
-type Tab = 'users' | 'objectives' | 'cycles';
+type Tab = 'users' | 'objectives' | 'cycles' | 'org';
+
+const TAB_LABELS: Record<Tab, string> = {
+    users: 'Users',
+    objectives: 'Objectives',
+    cycles: 'Cycles',
+    org: 'Org Tree',
+};
 
 export function AdminPage() {
+    const { user: currentUser } = useAuth();
     const [tab, setTab] = useState<Tab>('users');
 
     return (
@@ -20,25 +29,26 @@ export function AdminPage() {
             <p className="mt-1 text-slate-400">Manage users, roles, cycles, and company objectives</p>
 
             {/* Tab bar */}
-            <div className="mt-6 flex gap-1 border-b border-slate-700">
-                {(['users', 'objectives', 'cycles'] as const).map(t => (
+            <div className="mt-6 flex gap-1 border-b border-slate-700 overflow-x-auto">
+                {(['users', 'objectives', 'cycles', 'org'] as const).map(t => (
                     <button
                         key={t}
                         onClick={() => setTab(t)}
-                        className={`px-4 py-2 text-sm font-medium capitalize rounded-t-lg transition-colors ${tab === t
+                        className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${tab === t
                                 ? 'bg-surface-raised text-indigo-400 border border-slate-700 border-b-transparent -mb-px'
                                 : 'text-slate-400 hover:text-slate-200'
                             }`}
                     >
-                        {t}
+                        {TAB_LABELS[t]}
                     </button>
                 ))}
             </div>
 
             <div className="mt-6">
-                {tab === 'users' && <UsersTab />}
+                {tab === 'users' && <UsersTab currentUserId={currentUser?.id ?? ''} />}
                 {tab === 'objectives' && <ObjectivesTab />}
                 {tab === 'cycles' && <CyclesTab />}
+                {tab === 'org' && <OrgTreeTab />}
             </div>
         </PageTransition>
     );
@@ -46,7 +56,7 @@ export function AdminPage() {
 
 // ── Users Tab ──────────────────────────────────────────────
 
-function UsersTab() {
+function UsersTab({ currentUserId }: { currentUserId: string }) {
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
@@ -241,14 +251,16 @@ function UsersTab() {
                                             >
                                                 {actionLoading === `reset-${user.id}` ? 'Resetting...' : 'Reset'}
                                             </button>
-                                            <button
-                                                onClick={() => setDeleteConfirm(user.id)}
-                                                disabled={!!actionLoading}
-                                                className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                                                title="Delete user"
-                                            >
-                                                Delete
-                                            </button>
+                                            {user.id !== currentUserId && (
+                                                <button
+                                                    onClick={() => setDeleteConfirm(user.id)}
+                                                    disabled={!!actionLoading}
+                                                    className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                                                    title="Delete user"
+                                                >
+                                                    Delete
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -357,6 +369,7 @@ function UsersTab() {
                 isOpen={!!editUser}
                 user={editUser}
                 users={users}
+                currentUserId={currentUserId}
                 onClose={() => setEditUser(null)}
                 onUpdated={handleUserUpdated}
             />
@@ -535,7 +548,7 @@ function CreateUserModal({ isOpen, users, onClose, onCreated }: {
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
                     <input
-                        type="text"
+                        type="password"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                         required
@@ -568,13 +581,15 @@ function CreateUserModal({ isOpen, users, onClose, onCreated }: {
 
 // ── Edit User Modal ─────────────────────────────────────
 
-function EditUserModal({ isOpen, user, users, onClose, onUpdated }: {
+function EditUserModal({ isOpen, user, users, currentUserId, onClose, onUpdated }: {
     isOpen: boolean;
     user: User | null;
     users: User[];
+    currentUserId: string;
     onClose: () => void;
     onUpdated: (user: User) => void;
 }) {
+    const isEditingSelf = user?.id === currentUserId;
     const [displayName, setDisplayName] = useState('');
     const [jobTitle, setJobTitle] = useState('');
     const [department, setDepartment] = useState('');
@@ -711,11 +726,15 @@ function EditUserModal({ isOpen, user, users, onClose, onUpdated }: {
                         <select
                             value={role}
                             onChange={e => setRole(e.target.value as 'admin' | 'standard')}
-                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            disabled={isEditingSelf}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <option value="standard">Standard</option>
                             <option value="admin">Admin</option>
                         </select>
+                        {isEditingSelf && (
+                            <p className="text-xs text-slate-500 mt-1">(cannot change own role)</p>
+                        )}
                     </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-2">
@@ -797,7 +816,7 @@ function SetPasswordModal({ isOpen, user, onClose }: {
                     <div>
                         <label className="block text-sm font-medium text-slate-300 mb-1">New Password</label>
                         <input
-                            type="text"
+                            type="password"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
@@ -1578,6 +1597,252 @@ function CyclesTab() {
                     </div>
                 </form>
             </Modal>
+        </div>
+    );
+}
+
+// ── Org Tree Tab ────────────────────────────────────────────
+
+interface OrgTreeNode {
+    user: User;
+    children: OrgTreeNode[];
+}
+
+function buildOrgTree(users: User[]): OrgTreeNode[] {
+    const childrenMap = new Map<string | null, User[]>();
+    for (const u of users) {
+        const parentKey = u.managerId ?? null;
+        const list = childrenMap.get(parentKey) ?? [];
+        list.push(u);
+        childrenMap.set(parentKey, list);
+    }
+
+    function build(parentId: string | null): OrgTreeNode[] {
+        const children = childrenMap.get(parentId) ?? [];
+        return children
+            .sort((a, b) => a.level - b.level || a.displayName.localeCompare(b.displayName))
+            .map(user => ({
+                user,
+                children: build(user.id),
+            }));
+    }
+
+    return build(null);
+}
+
+function OrgTreeTab() {
+    const [users, setUsers] = useState<User[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        adminApi.getUsers()
+            .then(({ data }) => {
+                setUsers(data);
+                // Auto-expand the first 3 levels
+                const autoExpand = new Set<string>();
+                for (const u of data) {
+                    if (u.level <= 3) autoExpand.add(u.id);
+                }
+                setExpandedIds(autoExpand);
+            })
+            .catch(err => setError(getErrorMessage(err, 'Failed to load users')))
+            .finally(() => setIsLoading(false));
+    }, []);
+
+    const tree = useMemo(() => buildOrgTree(users), [users]);
+
+    const toggleExpand = (userId: string) => {
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(userId)) {
+                next.delete(userId);
+            } else {
+                next.add(userId);
+            }
+            return next;
+        });
+    };
+
+    const expandAll = () => {
+        setExpandedIds(new Set(users.map(u => u.id)));
+    };
+
+    const collapseAll = () => {
+        setExpandedIds(new Set());
+    };
+
+    // Count stats
+    const levelCounts = useMemo(() => {
+        const counts: Record<number, number> = {};
+        for (const u of users) {
+            counts[u.level] = (counts[u.level] ?? 0) + 1;
+        }
+        return counts;
+    }, [users]);
+
+    const orphans = useMemo(() => {
+        const userIds = new Set(users.map(u => u.id));
+        return users.filter(u => u.managerId && !userIds.has(u.managerId));
+    }, [users]);
+
+    if (isLoading) return <div className="flex justify-center py-12"><LoadingSpinner /></div>;
+    if (error) return (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+            {error}
+        </div>
+    );
+
+    return (
+        <div>
+            {/* Stats bar */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+                <span className="text-sm text-slate-400">
+                    {users.length} member{users.length !== 1 ? 's' : ''} across {Object.keys(levelCounts).length} levels
+                </span>
+                <div className="flex gap-2">
+                    {Object.entries(levelCounts)
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([lvl, count]) => (
+                            <span key={lvl} className="rounded-full bg-slate-700/50 px-2 py-0.5 text-xs text-slate-400">
+                                L{lvl}: {count}
+                            </span>
+                        ))}
+                </div>
+                <div className="ml-auto flex gap-2">
+                    <button
+                        onClick={expandAll}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                        Expand all
+                    </button>
+                    <button
+                        onClick={collapseAll}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                        Collapse all
+                    </button>
+                </div>
+            </div>
+
+            {orphans.length > 0 && (
+                <div className="mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm text-amber-400">
+                    ⚠ {orphans.length} user{orphans.length !== 1 ? 's' : ''} have managers that don&apos;t exist in the system: {orphans.map(u => u.displayName).join(', ')}
+                </div>
+            )}
+
+            {tree.length === 0 ? (
+                <div className="rounded-xl bg-surface-raised border border-slate-700 p-8 text-center text-slate-500">
+                    No users found. Add users in the Users tab to build the org tree.
+                </div>
+            ) : (
+                <div className="rounded-xl bg-surface-raised border border-slate-700 p-4">
+                    {tree.map(node => (
+                        <OrgTreeNodeRow
+                            key={node.user.id}
+                            node={node}
+                            depth={0}
+                            expandedIds={expandedIds}
+                            onToggle={toggleExpand}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+const LEVEL_COLOURS: Record<number, string> = {
+    1: 'border-l-purple-500',
+    2: 'border-l-blue-500',
+    3: 'border-l-cyan-500',
+    4: 'border-l-emerald-500',
+    5: 'border-l-slate-500',
+};
+
+function OrgTreeNodeRow({
+    node,
+    depth,
+    expandedIds,
+    onToggle,
+}: {
+    node: OrgTreeNode;
+    depth: number;
+    expandedIds: Set<string>;
+    onToggle: (id: string) => void;
+}) {
+    const { user, children } = node;
+    const hasChildren = children.length > 0;
+    const isExpanded = expandedIds.has(user.id);
+    const borderColour = LEVEL_COLOURS[user.level] ?? 'border-l-slate-600';
+
+    return (
+        <div>
+            <div
+                className={`flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-slate-800/40 transition-colors border-l-2 ${borderColour}`}
+                style={{ marginLeft: `${depth * 1.5}rem` }}
+            >
+                {/* Expand/collapse toggle */}
+                <button
+                    onClick={() => hasChildren && onToggle(user.id)}
+                    className={`w-5 h-5 flex items-center justify-center rounded text-xs transition-colors ${hasChildren
+                            ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 cursor-pointer'
+                            : 'text-slate-700 cursor-default'
+                        }`}
+                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    aria-expanded={hasChildren ? isExpanded : undefined}
+                    disabled={!hasChildren}
+                >
+                    {hasChildren ? (isExpanded ? '▾' : '▸') : '·'}
+                </button>
+
+                {/* Avatar placeholder */}
+                <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-300 shrink-0">
+                    {user.displayName.charAt(0).toUpperCase()}
+                </div>
+
+                {/* Name + details */}
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-200 text-sm truncate">{user.displayName}</span>
+                        <span className="shrink-0 rounded-full bg-slate-700/60 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                            L{user.level}
+                        </span>
+                        {user.role === 'admin' && (
+                            <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                                admin
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-xs text-slate-500 truncate">
+                        {user.jobTitle}
+                        {user.department && <span className="ml-1">· {user.department}</span>}
+                    </p>
+                </div>
+
+                {/* Report count */}
+                {hasChildren && (
+                    <span className="text-xs text-slate-500 shrink-0">
+                        {children.length} report{children.length !== 1 ? 's' : ''}
+                    </span>
+                )}
+            </div>
+
+            {/* Children */}
+            {hasChildren && isExpanded && (
+                <div>
+                    {children.map(child => (
+                        <OrgTreeNodeRow
+                            key={child.user.id}
+                            node={child}
+                            depth={depth + 1}
+                            expandedIds={expandedIds}
+                            onToggle={onToggle}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

@@ -21,16 +21,17 @@ import { CheckInModal } from '../components/check-ins/CheckInModal.js';
 import { CheckInTimeline } from '../components/check-ins/CheckInTimeline.js';
 import { ObjectiveFormModal } from '../components/objectives/ObjectiveFormModal.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
+import { Modal } from '../components/Modal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
 import { PageTransition } from '../components/PageTransition.js';
 import * as objectivesApi from '../services/objectives.api.js';
 import * as cascadeApi from '../services/cascade.api.js';
 
 export function ObjectiveDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { activeCycle } = useCycle();
-  const { objective, canEdit, isLoading, error, refetch } = useObjective(id!);
+  const { activeCycle, allCycles } = useCycle();
+  const { objective, canEdit, isLoading, error, refetch } = useObjective(id);
 
   const [cascadePath, setCascadePath] = useState<Objective[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -40,6 +41,10 @@ export function ObjectiveDetailPage() {
   const [confirmDeleteObj, setConfirmDeleteObj] = useState(false);
   const [confirmDeleteKR, setConfirmDeleteKR] = useState<KeyResult | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showRollforward, setShowRollforward] = useState(false);
+  const [rollforwardCycleId, setRollforwardCycleId] = useState('');
+  const [rollforwardLoading, setRollforwardLoading] = useState(false);
+  const [rollforwardError, setRollforwardError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -121,6 +126,26 @@ export function ObjectiveDetailPage() {
     }
   };
 
+  // Target cycles for rollforward: non-closed cycles other than the current one
+  const rollforwardTargetCycles = allCycles.filter(
+    c => c.id !== objective.cycleId && c.status !== 'closed',
+  );
+
+  const handleRollforward = async () => {
+    if (!rollforwardCycleId) return;
+    setRollforwardLoading(true);
+    setRollforwardError(null);
+    try {
+      const { data: newObjective } = await objectivesApi.rollforwardObjective(objective.id, rollforwardCycleId);
+      setShowRollforward(false);
+      navigate(`/objectives/${newObjective.id}`);
+    } catch (err) {
+      setRollforwardError(err instanceof Error ? err.message : 'Failed to roll forward objective');
+    } finally {
+      setRollforwardLoading(false);
+    }
+  };
+
   return (
     <PageTransition>
       {cascadePath.length > 1 && (
@@ -142,13 +167,25 @@ export function ObjectiveDetailPage() {
       </div>
 
       {canEdit && (
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           <button
             onClick={() => setShowEditModal(true)}
             className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
           >
             Edit
           </button>
+          {objective.status === 'active' && rollforwardTargetCycles.length > 0 && (
+            <button
+              onClick={() => {
+                setRollforwardCycleId(rollforwardTargetCycles[0].id);
+                setRollforwardError(null);
+                setShowRollforward(true);
+              }}
+              className="rounded-lg bg-amber-600/20 px-3 py-1.5 text-sm font-medium text-amber-400 hover:bg-amber-600/30 transition-colors"
+            >
+              Roll Forward
+            </button>
+          )}
           {objective.status === 'draft' && (
             <button
               onClick={() => setConfirmDeleteObj(true)}
@@ -206,7 +243,6 @@ export function ObjectiveDetailPage() {
         isOpen={showAddKR}
         onClose={() => setShowAddKR(false)}
         onSubmit={handleAddKR}
-        objectiveId={objective.id}
       />
 
       {editingKR && (
@@ -250,6 +286,58 @@ export function ObjectiveDetailPage() {
         variant="danger"
         isLoading={deleteLoading}
       />
+
+      {/* Roll forward modal */}
+      <Modal
+        isOpen={showRollforward}
+        onClose={() => setShowRollforward(false)}
+        title="Roll Forward Objective"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">
+            This will create a copy of <strong className="text-slate-200">&ldquo;{objective.title}&rdquo;</strong> in the
+            selected cycle with all key results reset to zero progress. The original will be marked as rolled forward.
+          </p>
+
+          <div>
+            <label htmlFor="rollforward-cycle" className="block text-sm font-medium text-slate-300 mb-1">
+              Target Cycle
+            </label>
+            <select
+              id="rollforward-cycle"
+              value={rollforwardCycleId}
+              onChange={e => setRollforwardCycleId(e.target.value)}
+              className="w-full rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              {rollforwardTargetCycles.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.status})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {rollforwardError && (
+            <p className="text-sm text-red-400">{rollforwardError}</p>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => setShowRollforward(false)}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRollforward}
+              disabled={rollforwardLoading || !rollforwardCycleId}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {rollforwardLoading ? 'Rolling forward…' : 'Roll Forward'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </PageTransition>
   );
 }

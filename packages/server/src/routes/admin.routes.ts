@@ -121,13 +121,12 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
     router.get('/objectives', async (req, res, next) => {
         try {
             const cycleId = req.query.cycleId as string | undefined;
-            // Get all users and fetch objectives for each
+            // Get all users and fetch objectives for each (in parallel)
             const users = await deps.userRepo.getAll();
-            const allObjectives = [];
-            for (const user of users) {
-                const objectives = await deps.objectiveService.getByUserId(user.id, cycleId);
-                allObjectives.push(...objectives);
-            }
+            const objectiveArrays = await Promise.all(
+                users.map(user => deps.objectiveService.getByUserId(user.id, cycleId)),
+            );
+            const allObjectives = objectiveArrays.flat();
             // Also get company-level objectives — only swallow NotFoundError
             try {
                 const companyObjectives = await deps.objectiveService.getByUserId('company', cycleId);

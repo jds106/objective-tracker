@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { KeyResult, KeyResultType, KeyResultConfig, CreateKeyResultBody, UpdateKeyResultBody } from '@objective-tracker/shared';
 import { Modal } from '../Modal.js';
 import { KeyResultConfigForm } from './KeyResultConfigForm.js';
@@ -8,7 +8,6 @@ interface KeyResultFormModalProps {
   onClose: () => void;
   onSubmit: (input: CreateKeyResultBody | UpdateKeyResultBody) => Promise<void>;
   keyResult?: KeyResult;
-  objectiveId?: string;
 }
 
 const defaultConfigs: Record<KeyResultType, KeyResultConfig> = {
@@ -23,7 +22,6 @@ export function KeyResultFormModal({
   onClose,
   onSubmit,
   keyResult,
-  objectiveId,
 }: KeyResultFormModalProps) {
   const isEdit = !!keyResult;
   const [title, setTitle] = useState(keyResult?.title ?? '');
@@ -31,6 +29,16 @@ export function KeyResultFormModal({
   const [config, setConfig] = useState<KeyResultConfig>(keyResult?.config ?? defaultConfigs.percentage);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset form state when the modal opens or the keyResult prop changes
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(keyResult?.title ?? '');
+      setType(keyResult?.type ?? 'percentage');
+      setConfig(keyResult?.config ?? defaultConfigs.percentage);
+      setError(null);
+    }
+  }, [isOpen, keyResult]);
 
   const handleTypeChange = (newType: KeyResultType) => {
     setType(newType);

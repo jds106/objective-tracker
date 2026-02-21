@@ -66,6 +66,12 @@ export function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileMsg({ type: 'error', text: 'File is too large. Maximum size is 2 MB.' });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => setAvatarPreview(reader.result as string);
     reader.readAsDataURL(file);
@@ -107,6 +113,18 @@ export function ProfilePage() {
     <PageTransition className="max-w-2xl">
       <h2 className="text-2xl font-bold text-slate-100">Profile</h2>
       <p className="mt-1 text-slate-400">Manage your account settings.</p>
+
+      {/* Email and role display */}
+      <div className="mt-4 flex items-center gap-3">
+        <p className="text-sm text-slate-400">{user.email}</p>
+        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+          user.role === 'admin'
+            ? 'bg-amber-500/15 text-amber-400'
+            : 'bg-slate-500/15 text-slate-400'
+        }`}>
+          {user.role === 'admin' ? 'Admin' : 'Standard'}
+        </span>
+      </div>
 
       {/* Avatar section */}
       <div className="mt-8 rounded-xl bg-surface-raised border border-slate-700 p-6">

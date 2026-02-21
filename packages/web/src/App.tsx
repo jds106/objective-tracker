@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/auth.context.js';
 import { CycleProvider } from './contexts/cycle.context.js';
-import { ReportsProvider } from './contexts/reports.context.js';
+import { ReportsProvider, useReports } from './contexts/reports.context.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { Layout } from './components/Layout.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
@@ -31,6 +31,16 @@ function PageLoader() {
       </div>
     </div>
   );
+}
+
+/** Redirects non-managers (users with no direct reports) to the dashboard. */
+function ManagerGuard({ children }: { children: React.ReactNode }) {
+  const { reports, isLoading } = useReports();
+
+  if (isLoading) return <PageLoader />;
+  if (reports.length === 0) return <Navigate to="/dashboard" replace />;
+
+  return <>{children}</>;
 }
 
 export function App() {
@@ -77,7 +87,9 @@ export function App() {
                   } />
                   <Route path="/team" element={
                     <ErrorBoundary>
-                      <TeamPage />
+                      <ManagerGuard>
+                        <TeamPage />
+                      </ManagerGuard>
                     </ErrorBoundary>
                   } />
                   <Route path="/profile" element={

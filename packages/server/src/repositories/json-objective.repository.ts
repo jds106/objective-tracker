@@ -73,26 +73,36 @@ export class JsonObjectiveRepository implements ObjectiveRepository {
     let file = await this.userRepo.readUserFile(input.ownerId);
 
     // Auto-create a pseudo-user file for company-level objectives
+    // Wrapped in withWriteLock to prevent a check-and-create race condition
     if (!file && input.ownerId === 'company') {
-      const companyFile: UserFile = {
-        version: 1,
-        user: {
-          id: 'company',
-          email: 'company@system',
-          displayName: 'Company',
-          jobTitle: '',
-          managerId: null,
-          level: 0,
-          department: '',
-          role: 'standard',
-          passwordHash: '',
-          createdAt: nowISO(),
-          updatedAt: nowISO(),
-        },
-        objectives: [],
-      };
-      await writeJsonFile(join(this.dataDir, 'users', 'company.json'), companyFile);
-      file = companyFile;
+      const companyFilePath = join(this.dataDir, 'users', 'company.json');
+      await withWriteLock(companyFilePath, async () => {
+        // Re-check after acquiring the lock — another request may have created it
+        const existing = await this.userRepo.readUserFile('company');
+        if (existing) {
+          file = existing;
+          return;
+        }
+        const companyFile: UserFile = {
+          version: 1,
+          user: {
+            id: 'company',
+            email: 'company@system',
+            displayName: 'Company',
+            jobTitle: '',
+            managerId: null,
+            level: 0,
+            department: '',
+            role: 'standard',
+            passwordHash: '',
+            createdAt: nowISO(),
+            updatedAt: nowISO(),
+          },
+          objectives: [],
+        };
+        await writeJsonFile(companyFilePath, companyFile);
+        file = companyFile;
+      });
     }
 
     if (!file) throw new NotFoundError('User not found');

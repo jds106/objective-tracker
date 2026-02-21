@@ -45,6 +45,7 @@ export interface CreateObjectiveInput {
   description: string;
   parentKeyResultId: string | null;
   parentObjectiveId: string | null;
+  rolledForwardFrom?: string;
 }
 
 export interface UpdateObjectiveInput {

@@ -14,9 +14,12 @@ interface ResetTokenEntry {
     expiresAt: number;
 }
 
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 export class PasswordResetService {
     private readonly tokens = new Map<string, ResetTokenEntry>();
     private readonly saltRounds: number;
+    private readonly sweepInterval: ReturnType<typeof setInterval>;
 
     constructor(
         private readonly userRepo: UserRepository,
@@ -24,6 +27,21 @@ export class PasswordResetService {
         saltRounds?: number,
     ) {
         this.saltRounds = saltRounds ?? DEFAULT_SALT_ROUNDS;
+
+        // Periodically sweep expired tokens to prevent unbounded memory growth
+        this.sweepInterval = setInterval(() => {
+            const now = Date.now();
+            for (const [token, entry] of this.tokens) {
+                if (now > entry.expiresAt) {
+                    this.tokens.delete(token);
+                }
+            }
+        }, SWEEP_INTERVAL_MS);
+    }
+
+    /** Clear the periodic sweep interval for clean shutdown. */
+    destroy(): void {
+        clearInterval(this.sweepInterval);
     }
 
     /**

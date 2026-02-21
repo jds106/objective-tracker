@@ -16,6 +16,7 @@ const statusOptions = [
   { value: 'active', label: 'Active' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: 'rolled_forward', label: 'Rolled Forward' },
 ];
 
 const healthOptions = [

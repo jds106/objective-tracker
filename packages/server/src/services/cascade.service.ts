@@ -4,6 +4,7 @@ import type {
   UserRepository,
   ObjectiveRepository,
 } from '@objective-tracker/shared';
+import { ForbiddenError } from '@objective-tracker/shared';
 import { VisibilityService } from './visibility.service.js';
 
 export interface CascadeNode {
@@ -102,6 +103,15 @@ export class CascadeService {
   }
 
   async getCascadePath(objectiveId: string, requesterId: string): Promise<CascadePathEntry[]> {
+    // Verify the requester can view the target objective's owner
+    const targetObjective = await this.objectiveRepo.getById(objectiveId);
+    if (targetObjective) {
+      const canViewTarget = await this.visibilityService.canView(requesterId, targetObjective.ownerId);
+      if (!canViewTarget) {
+        throw new ForbiddenError('You do not have visibility to view this objective');
+      }
+    }
+
     const path: CascadePathEntry[] = [];
     let currentId: string | null = objectiveId;
 
