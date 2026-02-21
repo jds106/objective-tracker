@@ -1,10 +1,33 @@
+import { motion } from 'framer-motion';
 import type { Objective } from '@objective-tracker/shared';
-import { calculateObjectiveProgress, calculateProgress } from '@objective-tracker/shared';
+import { calculateObjectiveProgress } from '@objective-tracker/shared';
 import { ProgressRing } from '../ProgressRing.js';
+import { useCountUp } from '../../hooks/useCountUp.js';
 
 interface StatCardsProps {
   objectives: Objective[];
 }
+
+function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
+  const animated = useCountUp(value);
+  return <>{animated}{suffix}</>;
+}
+
+const cardClass = 'rounded-xl bg-gradient-to-br from-surface-raised to-surface border border-slate-700/50 p-6';
+
+const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const fadeUp = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.3, ease: 'easeOut' as const },
+};
 
 export function StatCards({ objectives }: StatCardsProps) {
   const objectiveCount = objectives.length;
@@ -22,22 +45,31 @@ export function StatCards({ objectives }: StatCardsProps) {
     0,
   );
 
-  return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-      <div className="rounded-xl bg-surface-raised border border-slate-700 p-6">
-        <h3 className="text-sm font-medium text-slate-400">My Objectives</h3>
-        <p className="mt-2 text-3xl font-bold text-slate-100">{objectiveCount}</p>
-        <p className="mt-1 text-sm text-slate-500">
-          {objectiveCount === 0 ? 'No objectives yet' : `${objectives.filter(o => o.status === 'active').length} active`}
-        </p>
-      </div>
+  const activeCount = objectives.filter(o => o.status === 'active').length;
 
-      <div className="rounded-xl bg-surface-raised border border-slate-700 p-6">
+  return (
+    <motion.div
+      className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+    >
+      <motion.div className={cardClass} variants={fadeUp}>
+        <h3 className="text-sm font-medium text-slate-400">My Objectives</h3>
+        <p className="mt-2 text-4xl font-bold tracking-tight text-white tabular-nums">
+          <AnimatedNumber value={objectiveCount} />
+        </p>
+        <p className="mt-1 text-sm text-slate-500">
+          {objectiveCount === 0 ? 'No objectives yet' : `${activeCount} active`}
+        </p>
+      </motion.div>
+
+      <motion.div className={cardClass} variants={fadeUp}>
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-medium text-slate-400">Overall Progress</h3>
-            <p className="mt-2 text-3xl font-bold text-slate-100">
-              {objectiveCount > 0 ? `${Math.round(overallProgress)}%` : '\u2014'}
+            <p className="mt-2 text-4xl font-bold tracking-tight text-white tabular-nums">
+              {objectiveCount > 0 ? <AnimatedNumber value={Math.round(overallProgress)} suffix="%" /> : '\u2014'}
             </p>
             <p className="mt-1 text-sm text-slate-500">
               {objectiveCount > 0 ? 'Across all objectives' : 'Create objectives to track progress'}
@@ -47,15 +79,17 @@ export function StatCards({ objectives }: StatCardsProps) {
             <ProgressRing progress={overallProgress} size={56} strokeWidth={5} />
           )}
         </div>
-      </div>
+      </motion.div>
 
-      <div className="rounded-xl bg-surface-raised border border-slate-700 p-6">
+      <motion.div className={cardClass} variants={fadeUp}>
         <h3 className="text-sm font-medium text-slate-400">Check-ins</h3>
-        <p className="mt-2 text-3xl font-bold text-slate-100">{totalCheckIns || '\u2014'}</p>
+        <p className="mt-2 text-4xl font-bold tracking-tight text-white tabular-nums">
+          {totalCheckIns > 0 ? <AnimatedNumber value={totalCheckIns} /> : '\u2014'}
+        </p>
         <p className="mt-1 text-sm text-slate-500">
           {totalCheckIns > 0 ? 'Total recorded' : 'No check-ins yet'}
         </p>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

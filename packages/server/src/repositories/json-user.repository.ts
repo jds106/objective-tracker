@@ -24,7 +24,10 @@ interface OrgIndexEntry {
   managerId: string | null;
   level: number;
   department?: string;
+  avatarUrl?: string;
   role?: UserRole;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export class JsonUserRepository implements UserRepository {
@@ -140,9 +143,12 @@ export class JsonUserRepository implements UserRepository {
       if (!file) throw new NotFoundError('User not found');
 
       const now = nowISO();
+      // Handle avatarUrl: null → remove the field (undefined)
+      const { avatarUrl, ...restUpdates } = updates;
       const updatedUser: UserWithPassword = {
         ...file.user,
-        ...updates,
+        ...restUpdates,
+        ...(avatarUrl !== undefined && { avatarUrl: avatarUrl ?? undefined }),
         updatedAt: now,
       };
 
@@ -249,7 +255,10 @@ function toOrgEntry(user: UserWithPassword | User): OrgIndexEntry {
     managerId: user.managerId,
     level: user.level,
     department: user.department,
+    avatarUrl: user.avatarUrl,
     role: user.role,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
   };
 }
 
@@ -262,9 +271,10 @@ function stripOrgEntry(entry: OrgIndexEntry): User {
     managerId: entry.managerId,
     level: entry.level,
     department: entry.department,
+    avatarUrl: entry.avatarUrl,
     role: entry.role ?? 'standard',
-    createdAt: '',
-    updatedAt: '',
+    createdAt: entry.createdAt ?? '',
+    updatedAt: entry.updatedAt ?? '',
   };
 }
 

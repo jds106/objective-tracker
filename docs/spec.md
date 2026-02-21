@@ -112,6 +112,7 @@ interface User {
   managerId: string | null;      // null for CTO / top-level
   level: number;                 // 1 = CTO, 2 = Group Head, etc.
   department?: string;
+  avatarUrl?: string;            // Relative path to avatar image, e.g. "/avatars/{userId}.jpg"
   role: UserRole;                // 'admin' or 'standard' (see §2.3)
   createdAt: string;             // ISO 8601
   updatedAt: string;
@@ -325,16 +326,18 @@ A full view of a single objective:
 
 #### 5.3.3 Cascade Tree View (Primary Navigation)
 
-A top-down hierarchical visualisation:
+A top-down hierarchical D3-powered visualisation with pan and zoom:
 
-- Company objectives at the top
-- Expand downward through the levels
-- Each node shows: objective title, owner avatar/name, progress indicator
-- Click to drill into an objective
-- Colour-coded by health status
-- Smooth expand/collapse animations
-- Filter by: level, department, status, linked/unlinked
-- Search across objectives
+- Company objectives at the top, laid out using `d3-hierarchy` tree layout
+- Expand/collapse nodes to navigate the tree — top two levels expanded by default
+- Each node card shows: owner avatar (initials fallback), objective title, owner name, progress ring, health badge
+- Node border colour coded by health status: emerald (on track), amber (at risk), red (behind), slate (not started)
+- Click a node to navigate to objective detail; expand/collapse button on nodes with children
+- Zoom controls (bottom-right): zoom in, zoom out, reset/fit view
+- Pan by dragging the canvas; scroll to zoom
+- Filter bar above tree: search by title/owner, filter by status or health
+- SVG-based rendering with cubic bezier link paths between parent and child nodes
+- Animated expand/collapse via Framer Motion `AnimatePresence`
 
 #### 5.3.4 Network Graph View (Exploration)
 
@@ -350,11 +353,15 @@ A force-directed graph showing objective connections:
 
 #### 5.3.5 Team View (Manager)
 
-For managers, a view of their direct reports' objectives:
+For managers, a view of their direct reports' objectives. Only visible in the sidebar navigation if the current user has direct reports.
 
-- Each report shown with their objectives and aggregate progress
-- Ability to see which of the manager's KRs are well-supported by linked child objectives, and which are under-supported
-- Check-in status: who's up to date, who's overdue
+- **KR Support Summary** — colour-coded cards showing how well each of the manager's key results is supported by linked child objectives: emerald (2+ links), amber (1 link), red (0 links)
+- **Report cards** — one per direct report, showing avatar, name, job title, aggregate progress ring, and check-in recency indicator:
+  - "Up to date" (emerald) — last check-in within 7 days
+  - "Check-in due" (amber) — 7–14 days since last check-in
+  - "Overdue" (red) — >14 days since last check-in
+  - "No check-ins" (red) — objectives exist but no check-ins recorded
+- Each report card is expandable to show individual objectives with title, status badge, health badge, and progress bar, linking to objective detail
 
 #### 5.3.6 Admin Panel
 
@@ -366,7 +373,15 @@ Accessible only to users with `role: 'admin'` (see §2.3). The admin panel provi
 - **Org structure management**: Manual adjustments to reporting lines
 - **Workday CSV import**: Upload and map columns to build the org tree
 
-#### 5.3.7 AI Assistant Panel
+#### 5.3.7 Profile Page
+
+A user account management page at `/profile`:
+
+- **Avatar section** — shows current avatar (or initials fallback) with upload/change/remove buttons. Accepts PNG, JPEG, or WebP up to 2 MB. Preview shown before upload.
+- **Profile details form** — editable display name, job title, and department fields. Changes are reflected immediately across the app (sidebar, cascade tree, team view).
+- **Password change** — current password verification followed by new password + confirmation.
+
+#### 5.3.8 AI Assistant Panel
 
 A slide-out panel accessible from any objective editing context:
 
@@ -376,6 +391,30 @@ A slide-out panel accessible from any objective editing context:
 - Checks alignment with parent objectives
 - Helps choose the right KR measurement type
 - Provides best-practice examples relevant to the user's role and domain
+
+#### 5.3.9 Bulk Check-in Page
+
+A dedicated page at `/check-in` that allows users to update all their key results in a single flow:
+
+- **Route**: `/check-in`, accessible from the sidebar navigation ("Check-in") and a "Check in on all" button on the dashboard.
+- **Eligible objectives**: Filters to `active` or `draft` objectives that have at least one key result.
+- **Objective groups**: Each objective is rendered as a card showing its title, status badge, health badge, and a live-updating progress ring that recalculates as the user edits KR configs.
+- **Inline KR editing**: Each key result is displayed with an inline `KeyResultConfigForm` in check-in mode:
+  - Milestone KRs: Only checkbox toggles are shown (add/remove milestone buttons are hidden).
+  - Metric KRs: Only the "Current" value is editable (Start, Target, Unit, Direction are read-only).
+  - Percentage and Binary KRs behave as normal.
+- **Progress delta**: Each KR card shows the progress change as `old% → new% (±diff%)` with colour coding (emerald for increase, red for decrease).
+- **Optional notes**: A collapsible "Add note" textarea on each KR card.
+- **Dirty detection**: A KR is considered changed if `calculateProgress(editedConfig) !== calculateProgress(originalConfig)` or a non-empty note was added. Semantically meaningless changes (e.g. dragging a slider away and back) are not counted.
+- **Sticky footer bar**: Fixed at the bottom of the viewport showing:
+  - Change count (e.g. "3 changes")
+  - "Discard" button to reset all edits
+  - "Submit all check-ins" button (disabled when no changes or during submission)
+- **Submission**: Fires parallel `POST /api/key-results/:id/check-in` requests for all dirty KRs via `Promise.allSettled`. Each KR shows an individual success (green tick) or error (red warning) indicator.
+- **Post-submission states**:
+  - All succeeded: Footer shows "All check-ins recorded!" with a "Back to Dashboard" link.
+  - Partial failure: Footer shows "X of Y failed" with a "Retry failed" button.
+- **Unsaved changes warning**: A `beforeunload` event listener warns the user when navigating away with unsaved changes.
 
 ---
 
@@ -571,7 +610,7 @@ objective-tracker/
 ### 10.1 REST API Endpoints
 
 **Auth**
-- `POST /api/auth/register` — Create account (first user becomes admin, subsequent users are standard)
+- `POST /api/auth/register` — Create account (first user becomes admin, subsequent users are standard). Accepts optional `managerEmail` to resolve manager by email address, and auto-sets level to `manager.level + 1` when not explicitly provided.
 - `POST /api/auth/login` — Authenticate and receive JWT
 - `POST /api/auth/logout` — Revoke token
 - `POST /api/auth/forgot-password` — Request a password reset token (generic response to prevent user enumeration)
@@ -579,17 +618,23 @@ objective-tracker/
 
 **Users**
 - `GET /api/users/me` — Current user profile
+- `PUT /api/users/me` — Update own profile (displayName, jobTitle, department)
+- `POST /api/users/me/avatar` — Upload avatar image (multipart, max 2 MB, PNG/JPEG/WebP)
+- `DELETE /api/users/me/avatar` — Remove avatar
+- `POST /api/users/me/password` — Change password (requires current password)
 - `GET /api/users/:id` — Get user (if in visibility scope)
+- `GET /api/users/:id/objectives` — Get objectives for a user (if in visibility scope, filterable by cycle)
 - `GET /api/users/me/reports` — Direct reports
 - `GET /api/users/me/chain` — Full reporting chain (up to CTO)
 
 **Objectives**
 - `GET /api/objectives` — List current user's objectives (filterable by cycle)
+- `GET /api/objectives/company` — List company-level objectives (visible to all authenticated users)
 - `POST /api/objectives` — Create objective
-- `GET /api/objectives/:id` — Get objective detail
+- `GET /api/objectives/:id` — Get objective detail (includes `canEdit` boolean indicating whether the requester can edit this objective)
 - `PUT /api/objectives/:id` — Update objective
 - `DELETE /api/objectives/:id` — Delete objective (draft only)
-- `GET /api/objectives/:id/cascade` — Get cascade tree for objective
+- `GET /api/objectives/:id/cascade` — Get cascade path for objective (visibility-filtered: restricted objectives replaced with placeholders)
 - `POST /api/objectives/:id/rollforward` — Roll forward to new cycle
 
 **Key Results**
@@ -599,7 +644,7 @@ objective-tracker/
 - `POST /api/key-results/:id/check-in` — Record a check-in
 
 **Cascade**
-- `GET /api/cascade/tree` — Full cascade tree (scoped to user visibility)
+- `GET /api/cascade/tree` — Full cascade tree (scoped to user visibility). Company-level objectives are always included as root nodes. Admin users see the full tree for all users.
 - `GET /api/cascade/graph` — Network graph data (scoped to user visibility)
 
 **Cycles**
@@ -613,10 +658,12 @@ objective-tracker/
 - `POST /api/ai/summarise` — Generate cycle/review summary
 
 **Admin** (all endpoints require `role: 'admin'`)
+- `POST /api/admin/users` — Create a new user (always assigned `standard` role)
 - `GET /api/admin/users` — List all users
-- `PUT /api/admin/users/:id` — Update user (role, department, manager, job title)
+- `PUT /api/admin/users/:id` — Update user (role, department, manager, job title, level)
 - `DELETE /api/admin/users/:id` — Delete user (cannot self-delete)
 - `POST /api/admin/users/:id/reset-password` — Generate temporary password for user
+- `PUT /api/admin/users/:id/password` — Set a specific password for a user
 - `GET /api/admin/objectives` — List all objectives org-wide
 - `POST /api/admin/objectives/company` — Create a root-level company objective
 - `POST /api/admin/import/workday` — Upload and process Workday CSV
@@ -670,6 +717,7 @@ Based on progress vs. expected progress (linear interpolation through the cycle)
 - Cascade tree view (D3-based)
 - Parent objective linking workflow
 - Check-in recording (web UI)
+- Bulk check-in page for updating all KRs in one flow
 
 ### Phase 3: AI & Visualisation (Weeks 7–9)
 - AI assistant panel (Claude API integration)

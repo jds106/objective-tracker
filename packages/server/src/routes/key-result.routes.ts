@@ -6,6 +6,7 @@ import {
 } from '@objective-tracker/shared';
 import { createAuthMiddleware } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
+import { validateId } from '../middleware/validate-id.middleware.js';
 import type { RouteDependencies } from './index.js';
 
 export function createKeyResultRoutes(deps: RouteDependencies): Router {
@@ -13,7 +14,7 @@ export function createKeyResultRoutes(deps: RouteDependencies): Router {
   const auth = createAuthMiddleware(deps.authProvider);
 
   // POST /api/objectives/:objectiveId/key-results
-  router.post('/objectives/:objectiveId/key-results', auth, validate(createKeyResultSchema), async (req, res, next) => {
+  router.post('/objectives/:objectiveId/key-results', auth, validateId('objectiveId'), validate(createKeyResultSchema), async (req, res, next) => {
     try {
       const objective = await deps.objectiveService.getById(req.params.objectiveId);
       const canEdit = await deps.visibilityService.canEdit(req.user!.id, objective.ownerId);
@@ -30,7 +31,7 @@ export function createKeyResultRoutes(deps: RouteDependencies): Router {
   });
 
   // PUT /api/key-results/:id
-  router.put('/key-results/:id', auth, validate(updateKeyResultSchema), async (req, res, next) => {
+  router.put('/key-results/:id', auth, validateId(), validate(updateKeyResultSchema), async (req, res, next) => {
     try {
       const kr = await deps.keyResultService.getById(req.params.id);
       const objective = await deps.objectiveService.getById(kr.objectiveId);
@@ -48,7 +49,7 @@ export function createKeyResultRoutes(deps: RouteDependencies): Router {
   });
 
   // DELETE /api/key-results/:id
-  router.delete('/key-results/:id', auth, async (req, res, next) => {
+  router.delete('/key-results/:id', auth, validateId(), async (req, res, next) => {
     try {
       const kr = await deps.keyResultService.getById(req.params.id);
       const objective = await deps.objectiveService.getById(kr.objectiveId);
@@ -66,7 +67,7 @@ export function createKeyResultRoutes(deps: RouteDependencies): Router {
   });
 
   // POST /api/key-results/:id/check-in
-  router.post('/key-results/:id/check-in', auth, validate(checkInSchema), async (req, res, next) => {
+  router.post('/key-results/:id/check-in', auth, validateId(), validate(checkInSchema), async (req, res, next) => {
     try {
       const kr = await deps.keyResultService.getById(req.params.id);
       const objective = await deps.objectiveService.getById(kr.objectiveId);

@@ -1,6 +1,7 @@
+import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Objective } from '@objective-tracker/shared';
-import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
+import { calculateObjectiveProgress, calculateHealthStatus, type HealthStatus } from '@objective-tracker/shared';
 import { useCycle } from '../../contexts/cycle.context.js';
 import { ProgressRing } from '../ProgressRing.js';
 import { HealthBadge } from '../HealthBadge.js';
@@ -10,16 +11,31 @@ interface ObjectiveCardProps {
   objective: Objective;
 }
 
-export function ObjectiveCard({ objective }: ObjectiveCardProps) {
+const healthBorderColours: Record<HealthStatus, string> = {
+  on_track: 'border-l-emerald-500',
+  at_risk: 'border-l-amber-500',
+  behind: 'border-l-red-500',
+  not_started: 'border-l-slate-600',
+};
+
+export const ObjectiveCard = memo(function ObjectiveCard({ objective }: ObjectiveCardProps) {
   const { activeCycle } = useCycle();
-  const progress = calculateObjectiveProgress(objective.keyResults.map(kr => kr.progress));
-  const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
-  const health = calculateHealthStatus(progress, activeCycle, allCheckIns);
+
+  const progress = useMemo(
+    () => calculateObjectiveProgress(objective.keyResults.map(kr => kr.progress)),
+    [objective.keyResults],
+  );
+
+  const health = useMemo(() => {
+    const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
+    return calculateHealthStatus(progress, activeCycle, allCheckIns);
+  }, [objective.keyResults, progress, activeCycle]);
 
   return (
     <Link
       to={`/objectives/${objective.id}`}
-      className="block rounded-xl bg-surface-raised border border-slate-700 p-6 hover:border-slate-600 transition-colors"
+      className={`block rounded-xl bg-surface-raised border border-slate-700 border-l-[3px] ${healthBorderColours[health]} p-6 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-150`}
+      aria-label={`View objective: ${objective.title}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -38,4 +54,4 @@ export function ObjectiveCard({ objective }: ObjectiveCardProps) {
       </p>
     </Link>
   );
-}
+});

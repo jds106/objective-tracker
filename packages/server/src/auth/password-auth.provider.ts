@@ -5,14 +5,20 @@ import { loginSchema } from '@objective-tracker/shared';
 import { JwtService } from './jwt.service.js';
 import type { TokenBlacklist } from './token-blacklist.js';
 
-const SALT_ROUNDS = 12;
+/** Default bcrypt cost factor — configurable via BCRYPT_SALT_ROUNDS env var */
+const DEFAULT_SALT_ROUNDS = 12;
 
 export class PasswordAuthProvider implements AuthProvider {
+  private readonly saltRounds: number;
+
   constructor(
     private readonly userRepo: UserRepository,
     private readonly jwtService: JwtService,
     private readonly blacklist: TokenBlacklist,
-  ) {}
+    saltRounds?: number,
+  ) {
+    this.saltRounds = saltRounds ?? DEFAULT_SALT_ROUNDS;
+  }
 
   async authenticate(credentials: unknown): Promise<AuthResult> {
     const { email, password } = loginSchema.parse(credentials);
@@ -51,7 +57,18 @@ export class PasswordAuthProvider implements AuthProvider {
     this.blacklist.add(token);
   }
 
-  static async hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, SALT_ROUNDS);
+  async verifyPassword(userId: string, password: string): Promise<boolean> {
+    const user = await this.userRepo.getById(userId);
+    if (!user) return false;
+    return bcrypt.compare(password, user.passwordHash);
+  }
+
+  async changePassword(userId: string, newPassword: string): Promise<void> {
+    const hash = await bcrypt.hash(newPassword, this.saltRounds);
+    await this.userRepo.updatePassword(userId, hash);
+  }
+
+  static async hashPassword(password: string, saltRounds: number = DEFAULT_SALT_ROUNDS): Promise<string> {
+    return bcrypt.hash(password, saltRounds);
   }
 }

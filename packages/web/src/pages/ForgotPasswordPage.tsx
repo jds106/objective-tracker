@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { forgotPassword } from '../services/auth.api.js';
-import { ApiError } from '../services/api-client.js';
+import { getErrorMessage } from '../utils/error.js';
 
 export function ForgotPasswordPage() {
     const [email, setEmail] = useState('');
@@ -21,11 +21,7 @@ export function ForgotPasswordPage() {
                 setResetToken(data.resetToken);
             }
         } catch (err) {
-            if (err instanceof ApiError) {
-                setError(err.message);
-            } else {
-                setError('An unexpected error occurred');
-            }
+            setError(getErrorMessage(err, 'An unexpected error occurred'));
         } finally {
             setIsSubmitting(false);
         }
@@ -47,7 +43,7 @@ export function ForgotPasswordPage() {
                         </p>
                     </div>
 
-                    {resetToken && (
+                    {import.meta.env.DEV && resetToken && (
                         <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4">
                             <p className="text-xs font-medium text-amber-400 mb-1">Development mode — reset link:</p>
                             <Link
@@ -74,7 +70,8 @@ export function ForgotPasswordPage() {
         <div className="flex min-h-screen items-center justify-center px-4">
             <div className="w-full max-w-md space-y-8">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-indigo-400">Objective Tracker</h1>
+                    <img src="/logo.png" alt="North Star" className="mx-auto h-24 w-auto rounded-2xl" />
+                    <h1 className="mt-4 text-3xl font-bold text-indigo-400">North Star</h1>
                     <p className="mt-2 text-sm text-slate-400">Reset your password</p>
                 </div>
 
@@ -95,11 +92,11 @@ export function ForgotPasswordPage() {
                         </label>
                         <input
                             id="email"
-                            type="email"
+                            type="text"
                             required
                             value={email}
                             onChange={e => setEmail(e.target.value)}
-                            className="mt-1 block w-full rounded-lg border border-slate-600 bg-surface px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="mt-1 block w-full rounded-lg border border-slate-600 bg-surface px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:shadow-sm focus:shadow-indigo-500/20"
                             placeholder="you@company.com"
                         />
                     </div>

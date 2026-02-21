@@ -1,4 +1,5 @@
 import type { Objective, CheckIn } from '@objective-tracker/shared';
+import { EmptyState } from '../EmptyState.js';
 
 interface ActivityItem {
   checkIn: CheckIn;
@@ -51,9 +52,16 @@ export function RecentActivity({ objectives }: RecentActivityProps) {
 
   if (recent.length === 0) {
     return (
-      <div className="text-sm text-slate-500 py-4">
-        No recent activity. Record a check-in to see updates here.
-      </div>
+      <EmptyState
+        icon={
+          <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+        }
+        title="No recent activity"
+        description="Your check-in history will appear here once you start recording progress."
+        className="py-6"
+      />
     );
   }
 
@@ -61,7 +69,13 @@ export function RecentActivity({ objectives }: RecentActivityProps) {
     <div className="space-y-3">
       {recent.map(item => (
         <div key={item.checkIn.id} className="flex items-start gap-3 py-2">
-          <div className="mt-1 h-2 w-2 rounded-full bg-indigo-500 shrink-0" />
+          <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
+            item.checkIn.newProgress > item.checkIn.previousProgress
+              ? 'bg-emerald-500'
+              : item.checkIn.newProgress < item.checkIn.previousProgress
+                ? 'bg-red-500'
+                : 'bg-slate-500'
+          }`} />
           <div className="min-w-0 flex-1">
             <p className="text-sm text-slate-200">
               <span className="font-medium">{item.krTitle}</span>

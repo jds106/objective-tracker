@@ -1,23 +1,26 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { User, Objective } from '@objective-tracker/shared';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { User, Objective, Cycle, CycleStatus } from '@objective-tracker/shared';
 import { useCycle } from '../contexts/cycle.context.js';
+import { Modal } from '../components/Modal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
-import { ApiError } from '../services/api-client.js';
+import { PageTransition } from '../components/PageTransition.js';
+import { useDebounce } from '../hooks/useDebounce.js';
+import { getErrorMessage } from '../utils/error.js';
 import * as adminApi from '../services/admin.api.js';
 
-type Tab = 'users' | 'objectives';
+type Tab = 'users' | 'objectives' | 'cycles';
 
 export function AdminPage() {
     const [tab, setTab] = useState<Tab>('users');
 
     return (
-        <div>
+        <PageTransition>
             <h2 className="text-2xl font-bold text-slate-100">Administration</h2>
-            <p className="mt-1 text-slate-400">Manage users, roles, and company objectives</p>
+            <p className="mt-1 text-slate-400">Manage users, roles, cycles, and company objectives</p>
 
             {/* Tab bar */}
             <div className="mt-6 flex gap-1 border-b border-slate-700">
-                {(['users', 'objectives'] as const).map(t => (
+                {(['users', 'objectives', 'cycles'] as const).map(t => (
                     <button
                         key={t}
                         onClick={() => setTab(t)}
@@ -32,9 +35,11 @@ export function AdminPage() {
             </div>
 
             <div className="mt-6">
-                {tab === 'users' ? <UsersTab /> : <ObjectivesTab />}
+                {tab === 'users' && <UsersTab />}
+                {tab === 'objectives' && <ObjectivesTab />}
+                {tab === 'cycles' && <CyclesTab />}
             </div>
-        </div>
+        </PageTransition>
     );
 }
 
@@ -45,15 +50,20 @@ function UsersTab() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
+    const debouncedSearch = useDebounce(search, 250);
     const [tempPassword, setTempPassword] = useState<{ userId: string; password: string } | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+    const [showCreateUser, setShowCreateUser] = useState(false);
+    const [setPasswordUser, setSetPasswordUser] = useState<User | null>(null);
+    const [editUser, setEditUser] = useState<User | null>(null);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
 
     const fetchUsers = useCallback(async () => {
         try {
             const { data } = await adminApi.getUsers();
             setUsers(data);
         } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Failed to load users');
+            setError(getErrorMessage(err, 'Failed to load users'));
         } finally {
             setIsLoading(false);
         }
@@ -62,39 +72,66 @@ function UsersTab() {
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
     const handleRoleToggle = async (user: User) => {
+        setActionLoading(`role-${user.id}`);
         try {
             const newRole = user.role === 'admin' ? 'standard' as const : 'admin' as const;
             await adminApi.updateUser(user.id, { role: newRole });
             setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
         } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Failed to update role');
+            setError(getErrorMessage(err, 'Failed to update role'));
+        } finally {
+            setActionLoading(null);
         }
     };
 
     const handleResetPassword = async (userId: string) => {
+        setActionLoading(`reset-${userId}`);
         try {
             const { data } = await adminApi.adminResetPassword(userId);
             setTempPassword({ userId, password: data.temporaryPassword });
         } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Failed to reset password');
+            setError(getErrorMessage(err, 'Failed to reset password'));
+        } finally {
+            setActionLoading(null);
         }
     };
 
     const handleDelete = async (userId: string) => {
+        setActionLoading(`delete-${userId}`);
         try {
             await adminApi.deleteUser(userId);
             setUsers(prev => prev.filter(u => u.id !== userId));
             setDeleteConfirm(null);
         } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Failed to delete user');
+            setError(getErrorMessage(err, 'Failed to delete user'));
+        } finally {
+            setActionLoading(null);
         }
     };
 
-    const filtered = users.filter(u =>
-        u.displayName.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase()) ||
-        (u.department ?? '').toLowerCase().includes(search.toLowerCase())
-    );
+    const handleUserCreated = (user: User) => {
+        setUsers(prev => [...prev, user]);
+        setShowCreateUser(false);
+    };
+
+    const handleUserUpdated = (updated: User) => {
+        setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+        setEditUser(null);
+    };
+
+    const filtered = users.filter(u => {
+        const term = debouncedSearch.toLowerCase();
+        return u.displayName.toLowerCase().includes(term) ||
+            u.email.toLowerCase().includes(term) ||
+            (u.department ?? '').toLowerCase().includes(term);
+    });
+
+    // Build a manager lookup for display
+    const userMap = useMemo(() => {
+        const map = new Map<string, User>();
+        for (const u of users) map.set(u.id, u);
+        return map;
+    }, [users]);
 
     if (isLoading) return <div className="flex justify-center py-12"><LoadingSpinner /></div>;
 
@@ -107,66 +144,109 @@ function UsersTab() {
                 </div>
             )}
 
-            {/* Search */}
-            <input
-                type="text"
-                placeholder="Search users by name, email, or department…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full max-w-md rounded-lg bg-surface-raised border border-slate-700 px-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none mb-4"
-            />
+            {/* Search + Add User */}
+            <div className="flex items-center gap-3 mb-4">
+                <input
+                    type="text"
+                    placeholder="Search users by name, email, or department..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="flex-1 max-w-md rounded-lg bg-surface-raised border border-slate-700 px-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                />
+                <button
+                    onClick={() => setShowCreateUser(true)}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors shrink-0"
+                >
+                    + Add User
+                </button>
+            </div>
 
             <div className="rounded-xl bg-surface-raised border border-slate-700 overflow-hidden">
                 <table className="w-full text-sm text-left">
                     <thead>
                         <tr className="border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
                             <th className="px-4 py-3">Name</th>
-                            <th className="px-4 py-3">Email</th>
+                            <th className="px-4 py-3 hidden sm:table-cell">Email</th>
                             <th className="px-4 py-3">Role</th>
-                            <th className="px-4 py-3">Department</th>
+                            <th className="px-4 py-3 hidden md:table-cell">Manager</th>
+                            <th className="px-4 py-3 hidden lg:table-cell">Level</th>
+                            <th className="px-4 py-3 hidden md:table-cell">Department</th>
                             <th className="px-4 py-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filtered.map(user => (
-                            <tr key={user.id} className="border-b border-slate-700/50 hover:bg-slate-800/40 transition-colors">
-                                <td className="px-4 py-3 font-medium text-slate-200">{user.displayName}</td>
-                                <td className="px-4 py-3 text-slate-400">{user.email}</td>
-                                <td className="px-4 py-3">
-                                    <button
-                                        onClick={() => handleRoleToggle(user)}
-                                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer ${user.role === 'admin'
-                                                ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
-                                                : 'bg-slate-500/15 text-slate-400 hover:bg-slate-500/25'
-                                            }`}
-                                    >
-                                        {user.role}
-                                    </button>
-                                </td>
-                                <td className="px-4 py-3 text-slate-400">{user.department ?? '—'}</td>
-                                <td className="px-4 py-3 text-right">
-                                    <div className="flex items-center justify-end gap-2">
+                        {filtered.map(user => {
+                            const manager = user.managerId ? userMap.get(user.managerId) : null;
+                            return (
+                                <tr key={user.id} className="border-b border-slate-700/50 hover:bg-slate-800/40 transition-colors">
+                                    <td className="px-4 py-3">
+                                        <div>
+                                            <p className="font-medium text-slate-200">{user.displayName}</p>
+                                            <p className="text-xs text-slate-500 sm:hidden">{user.email}</p>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-400 hidden sm:table-cell">{user.email}</td>
+                                    <td className="px-4 py-3">
                                         <button
-                                            onClick={() => handleResetPassword(user.id)}
-                                            className="rounded px-2 py-1 text-xs text-indigo-400 hover:bg-indigo-500/10 transition-colors"
-                                            title="Reset password"
+                                            onClick={() => handleRoleToggle(user)}
+                                            disabled={actionLoading === `role-${user.id}`}
+                                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 ${user.role === 'admin'
+                                                    ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
+                                                    : 'bg-slate-500/15 text-slate-400 hover:bg-slate-500/25'
+                                                }`}
                                         >
-                                            Reset PW
+                                            {actionLoading === `role-${user.id}` ? '...' : user.role}
                                         </button>
-                                        <button
-                                            onClick={() => setDeleteConfirm(user.id)}
-                                            className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-                                            title="Delete user"
-                                        >
-                                            Delete
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-400 hidden md:table-cell">
+                                        {manager ? manager.displayName : <span className="text-slate-600">—</span>}
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">
+                                        L{user.level}
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-400 hidden md:table-cell">{user.department ?? '—'}</td>
+                                    <td className="px-4 py-3 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button
+                                                onClick={() => setEditUser(user)}
+                                                disabled={!!actionLoading}
+                                                className="rounded px-2 py-1 text-xs text-indigo-400 hover:bg-indigo-500/10 transition-colors disabled:opacity-50"
+                                                title="Edit user details"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => setSetPasswordUser(user)}
+                                                disabled={!!actionLoading}
+                                                className="rounded px-2 py-1 text-xs text-indigo-400 hover:bg-indigo-500/10 transition-colors disabled:opacity-50"
+                                                title="Set a new password for this user"
+                                            >
+                                                Set Password
+                                            </button>
+                                            <button
+                                                onClick={() => handleResetPassword(user.id)}
+                                                disabled={actionLoading === `reset-${user.id}`}
+                                                className="rounded px-2 py-1 text-xs text-indigo-400 hover:bg-indigo-500/10 transition-colors disabled:opacity-50 hidden sm:inline-flex"
+                                                title="Generate a random temporary password"
+                                            >
+                                                {actionLoading === `reset-${user.id}` ? 'Resetting...' : 'Reset'}
+                                            </button>
+                                            <button
+                                                onClick={() => setDeleteConfirm(user.id)}
+                                                disabled={!!actionLoading}
+                                                className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                                                title="Delete user"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         {filtered.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                                     {search ? 'No users match your search' : 'No users found'}
                                 </td>
                             </tr>
@@ -178,41 +258,499 @@ function UsersTab() {
             <p className="mt-3 text-xs text-slate-500">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
 
             {/* Temp password modal */}
-            {tempPassword && (
-                <Modal onClose={() => setTempPassword(null)} title="Password Reset">
-                    <p className="text-sm text-slate-300 mb-3">
-                        The password for this user has been reset. Give them this temporary password:
-                    </p>
-                    <code className="block rounded-lg bg-slate-900 border border-slate-700 px-4 py-3 text-sm text-emerald-400 font-mono select-all">
-                        {tempPassword.password}
-                    </code>
-                    <p className="text-xs text-slate-500 mt-2">This password will not be shown again.</p>
-                </Modal>
-            )}
+            <Modal
+                isOpen={!!tempPassword}
+                onClose={() => setTempPassword(null)}
+                title="Password Reset"
+            >
+                <p className="text-sm text-slate-300 mb-3">
+                    The password for this user has been reset. Give them this temporary password:
+                </p>
+                <code className="block rounded-lg bg-slate-900 border border-slate-700 px-4 py-3 text-sm text-emerald-400 font-mono select-all">
+                    {tempPassword?.password}
+                </code>
+                <p className="text-xs text-slate-500 mt-2">This password will not be shown again.</p>
+            </Modal>
 
             {/* Delete confirmation modal */}
-            {deleteConfirm && (
-                <Modal onClose={() => setDeleteConfirm(null)} title="Delete User">
-                    <p className="text-sm text-slate-300 mb-4">
-                        Are you sure you want to delete this user? This action cannot be undone.
-                    </p>
-                    <div className="flex justify-end gap-3">
+            <Modal
+                isOpen={!!deleteConfirm}
+                onClose={() => setDeleteConfirm(null)}
+                title="Delete User"
+            >
+                <p className="text-sm text-slate-300 mb-4">
+                    Are you sure you want to delete this user? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                    <button
+                        onClick={() => setDeleteConfirm(null)}
+                        className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+                        className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors"
+                    >
+                        Delete User
+                    </button>
+                </div>
+            </Modal>
+
+            {/* Create user modal */}
+            <CreateUserModal
+                isOpen={showCreateUser}
+                users={users}
+                onClose={() => setShowCreateUser(false)}
+                onCreated={handleUserCreated}
+            />
+
+            {/* Edit user modal */}
+            <EditUserModal
+                isOpen={!!editUser}
+                user={editUser}
+                users={users}
+                onClose={() => setEditUser(null)}
+                onUpdated={handleUserUpdated}
+            />
+
+            {/* Set password modal */}
+            <SetPasswordModal
+                isOpen={!!setPasswordUser}
+                user={setPasswordUser}
+                onClose={() => setSetPasswordUser(null)}
+            />
+        </div>
+    );
+}
+
+// ── Create User Modal ─────────────────────────────────────
+
+function CreateUserModal({ isOpen, users, onClose, onCreated }: {
+    isOpen: boolean;
+    users: User[];
+    onClose: () => void;
+    onCreated: (user: User) => void;
+}) {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [displayName, setDisplayName] = useState('');
+    const [jobTitle, setJobTitle] = useState('');
+    const [department, setDepartment] = useState('');
+    const [managerId, setManagerId] = useState('');
+    const [level, setLevel] = useState(5);
+    const [role, setRole] = useState<'admin' | 'standard'>('standard');
+    const [error, setError] = useState('');
+    const [creating, setCreating] = useState(false);
+
+    // Reset form when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setEmail('');
+            setPassword('');
+            setDisplayName('');
+            setJobTitle('');
+            setDepartment('');
+            setManagerId('');
+            setLevel(5);
+            setRole('standard');
+            setError('');
+        }
+    }, [isOpen]);
+
+    // Auto-set level from manager
+    useEffect(() => {
+        if (managerId) {
+            const manager = users.find(u => u.id === managerId);
+            if (manager) {
+                setLevel(Math.min(manager.level + 1, 5));
+            }
+        }
+    }, [managerId, users]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setCreating(true);
+        try {
+            const { data } = await adminApi.createUser({
+                email,
+                password,
+                displayName,
+                jobTitle,
+                department: department || undefined,
+                managerId: managerId || undefined,
+                level,
+                role,
+            });
+            onCreated(data);
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to create user'));
+        } finally {
+            setCreating(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Add User">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">{error}</div>
+                )}
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        required
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        placeholder="user@company.com"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Display Name</label>
+                    <input
+                        type="text"
+                        value={displayName}
+                        onChange={e => setDisplayName(e.target.value)}
+                        required
+                        maxLength={100}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        placeholder="Jane Smith"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Job Title</label>
+                    <input
+                        type="text"
+                        value={jobTitle}
+                        onChange={e => setJobTitle(e.target.value)}
+                        required
+                        maxLength={100}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        placeholder="Software Engineer"
+                    />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Manager</label>
+                        <select
+                            value={managerId}
+                            onChange={e => setManagerId(e.target.value)}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        >
+                            <option value="">None (top-level)</option>
+                            {users.map(u => (
+                                <option key={u.id} value={u.id}>
+                                    {u.displayName} (L{u.level})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Level</label>
+                        <select
+                            value={level}
+                            onChange={e => setLevel(Number(e.target.value))}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        >
+                            {[1, 2, 3, 4, 5].map(l => (
+                                <option key={l} value={l}>L{l} — {levelLabel(l)}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Department</label>
+                    <input
+                        type="text"
+                        value={department}
+                        onChange={e => setDepartment(e.target.value)}
+                        maxLength={100}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        placeholder="Engineering"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                    <input
+                        type="text"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        required
+                        minLength={8}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none font-mono"
+                        placeholder="Initial password"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Minimum 8 characters. The user can change this later.</p>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={creating}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                    >
+                        {creating ? 'Creating...' : 'Create User'}
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    );
+}
+
+// ── Edit User Modal ─────────────────────────────────────
+
+function EditUserModal({ isOpen, user, users, onClose, onUpdated }: {
+    isOpen: boolean;
+    user: User | null;
+    users: User[];
+    onClose: () => void;
+    onUpdated: (user: User) => void;
+}) {
+    const [displayName, setDisplayName] = useState('');
+    const [jobTitle, setJobTitle] = useState('');
+    const [department, setDepartment] = useState('');
+    const [managerId, setManagerId] = useState('');
+    const [level, setLevel] = useState(5);
+    const [error, setError] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    // Populate form when user changes
+    useEffect(() => {
+        if (user) {
+            setDisplayName(user.displayName);
+            setJobTitle(user.jobTitle);
+            setDepartment(user.department ?? '');
+            setManagerId(user.managerId ?? '');
+            setLevel(user.level);
+            setError('');
+        }
+    }, [user]);
+
+    // Auto-set level from manager when manager changes
+    const handleManagerChange = (newManagerId: string) => {
+        setManagerId(newManagerId);
+        if (newManagerId) {
+            const manager = users.find(u => u.id === newManagerId);
+            if (manager) {
+                setLevel(Math.min(manager.level + 1, 5));
+            }
+        }
+    };
+
+    // Filter out the current user and their reports from manager options to prevent cycles
+    const managerOptions = useMemo(() => {
+        if (!user) return users;
+        const downward = getDownwardIds(user.id, users);
+        return users.filter(u => !downward.has(u.id));
+    }, [user, users]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user) return;
+        setError('');
+        setSaving(true);
+        try {
+            const { data } = await adminApi.updateUser(user.id, {
+                displayName,
+                jobTitle,
+                department: department || undefined,
+                managerId: managerId || null,
+                level,
+            });
+            onUpdated(data);
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to update user'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Edit User — ${user?.displayName ?? ''}`}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">{error}</div>
+                )}
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Display Name</label>
+                    <input
+                        type="text"
+                        value={displayName}
+                        onChange={e => setDisplayName(e.target.value)}
+                        required
+                        maxLength={100}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Job Title</label>
+                    <input
+                        type="text"
+                        value={jobTitle}
+                        onChange={e => setJobTitle(e.target.value)}
+                        required
+                        maxLength={100}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                    />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Manager</label>
+                        <select
+                            value={managerId}
+                            onChange={e => handleManagerChange(e.target.value)}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        >
+                            <option value="">None (top-level)</option>
+                            {managerOptions.map(u => (
+                                <option key={u.id} value={u.id}>
+                                    {u.displayName} (L{u.level})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Level</label>
+                        <select
+                            value={level}
+                            onChange={e => setLevel(Number(e.target.value))}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        >
+                            {[1, 2, 3, 4, 5].map(l => (
+                                <option key={l} value={l}>L{l} — {levelLabel(l)}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Department</label>
+                    <input
+                        type="text"
+                        value={department}
+                        onChange={e => setDepartment(e.target.value)}
+                        maxLength={100}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        placeholder="Engineering"
+                    />
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={saving}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                    >
+                        {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    );
+}
+
+// ── Set Password Modal ────────────────────────────────────
+
+function SetPasswordModal({ isOpen, user, onClose }: {
+    isOpen: boolean;
+    user: User | null;
+    onClose: () => void;
+}) {
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // Reset form when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setPassword('');
+            setError('');
+            setSuccess(false);
+        }
+    }, [isOpen]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user) return;
+        setError('');
+        setSaving(true);
+        try {
+            await adminApi.adminSetPassword(user.id, password);
+            setSuccess(true);
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to set password'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Set Password — ${user?.displayName ?? ''}`}>
+            {success ? (
+                <div>
+                    <p className="text-sm text-emerald-400 mb-4">Password has been set successfully.</p>
+                    <div className="flex justify-end">
                         <button
-                            onClick={() => setDeleteConfirm(null)}
+                            onClick={onClose}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
+                        >
+                            Done
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {error && (
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">{error}</div>
+                    )}
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">New Password</label>
+                        <input
+                            type="text"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            required
+                            minLength={8}
+                            aria-describedby="set-password-hint"
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none font-mono"
+                            placeholder="Enter new password"
+                        />
+                        <p id="set-password-hint" className="text-xs text-slate-500 mt-1">At least 8 characters</p>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
                             className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
                         >
                             Cancel
                         </button>
                         <button
-                            onClick={() => handleDelete(deleteConfirm)}
-                            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors"
+                            type="submit"
+                            disabled={saving || !password}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
                         >
-                            Delete User
+                            {saving ? 'Setting...' : 'Set Password'}
                         </button>
                     </div>
-                </Modal>
+                </form>
             )}
-        </div>
+        </Modal>
     );
 }
 
@@ -221,6 +759,7 @@ function UsersTab() {
 function ObjectivesTab() {
     const { activeCycle } = useCycle();
     const [objectives, setObjectives] = useState<Objective[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [showCreate, setShowCreate] = useState(false);
@@ -228,18 +767,29 @@ function ObjectivesTab() {
     const [description, setDescription] = useState('');
     const [creating, setCreating] = useState(false);
 
-    const fetchObjectives = useCallback(async () => {
+    const fetchData = useCallback(async () => {
         try {
-            const { data } = await adminApi.getAllObjectives(activeCycle?.id);
-            setObjectives(data);
+            const [objRes, userRes] = await Promise.all([
+                adminApi.getAllObjectives(activeCycle?.id),
+                adminApi.getUsers(),
+            ]);
+            setObjectives(objRes.data);
+            setUsers(userRes.data);
         } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Failed to load objectives');
+            setError(getErrorMessage(err, 'Failed to load objectives'));
         } finally {
             setIsLoading(false);
         }
     }, [activeCycle?.id]);
 
-    useEffect(() => { fetchObjectives(); }, [fetchObjectives]);
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    // Build user lookup map for owner name resolution
+    const userMap = useMemo(() => {
+        const map = new Map<string, User>();
+        for (const u of users) map.set(u.id, u);
+        return map;
+    }, [users]);
 
     const handleCreateCompanyObjective = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -256,7 +806,7 @@ function ObjectivesTab() {
             setDescription('');
             setShowCreate(false);
         } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Failed to create objective');
+            setError(getErrorMessage(err, 'Failed to create objective'));
         } finally {
             setCreating(false);
         }
@@ -317,68 +867,74 @@ function ObjectivesTab() {
                 ) : (
                     <div className="grid gap-3">
                         {userObjectives.map(obj => (
-                            <ObjectiveRow key={obj.id} objective={obj} />
+                            <ObjectiveRow key={obj.id} objective={obj} userMap={userMap} />
                         ))}
                     </div>
                 )}
             </div>
 
             {/* Create company objective modal */}
-            {showCreate && (
-                <Modal onClose={() => setShowCreate(false)} title="Create Company Objective">
-                    <form onSubmit={handleCreateCompanyObjective} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-1">Title</label>
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={e => setTitle(e.target.value)}
-                                required
-                                maxLength={200}
-                                className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
-                                placeholder="e.g. Increase company revenue by 20%"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
-                            <textarea
-                                value={description}
-                                onChange={e => setDescription(e.target.value)}
-                                rows={3}
-                                maxLength={2000}
-                                className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none resize-none"
-                                placeholder="Brief description of this company-level goal…"
-                            />
-                        </div>
-                        <div className="flex justify-end gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowCreate(false)}
-                                className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={creating || !title.trim()}
-                                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
-                            >
-                                {creating ? 'Creating…' : 'Create Objective'}
-                            </button>
-                        </div>
-                    </form>
-                </Modal>
-            )}
+            <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Create Company Objective">
+                <form onSubmit={handleCreateCompanyObjective} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Title</label>
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                            required
+                            maxLength={200}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            placeholder="e.g. Increase company revenue by 20%"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                        <textarea
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            rows={3}
+                            maxLength={2000}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none resize-none"
+                            placeholder="Brief description of this company-level goal..."
+                        />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setShowCreate(false)}
+                            className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={creating || !title.trim()}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                        >
+                            {creating ? 'Creating...' : 'Create Objective'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 }
 
 // ── Shared Components ──────────────────────────────────────
 
-function ObjectiveRow({ objective, isCompany }: { objective: Objective; isCompany?: boolean }) {
+function ObjectiveRow({ objective, isCompany, userMap }: {
+    objective: Objective;
+    isCompany?: boolean;
+    userMap?: Map<string, User>;
+}) {
     const progress = objective.keyResults.length > 0
         ? Math.round(objective.keyResults.reduce((sum, kr) => sum + kr.progress, 0) / objective.keyResults.length)
         : 0;
+
+    const ownerName = !isCompany && objective.ownerId && userMap
+        ? userMap.get(objective.ownerId)?.displayName ?? 'Unknown user'
+        : null;
 
     return (
         <div className="rounded-xl bg-surface-raised border border-slate-700 p-4 flex items-center gap-4">
@@ -414,8 +970,8 @@ function ObjectiveRow({ objective, isCompany }: { objective: Objective; isCompan
                 )}
                 <p className="text-xs text-slate-500 mt-0.5">
                     {objective.keyResults.length} key result{objective.keyResults.length !== 1 ? 's' : ''} · {progress}% complete
-                    {!isCompany && objective.ownerId && (
-                        <span className="ml-1">· Owner: {objective.ownerId.slice(0, 8)}…</span>
+                    {ownerName && (
+                        <span className="ml-1">· Owner: {ownerName}</span>
                     )}
                 </p>
             </div>
@@ -423,21 +979,351 @@ function ObjectiveRow({ objective, isCompany }: { objective: Objective; isCompan
     );
 }
 
-function Modal({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title: string }) {
+// ── Cycles Tab ──────────────────────────────────────────────
+
+const CYCLE_STATUS_STYLES: Record<CycleStatus, string> = {
+    planning: 'bg-slate-500/15 text-slate-400',
+    active: 'bg-emerald-500/15 text-emerald-400',
+    review: 'bg-amber-500/15 text-amber-400',
+    closed: 'bg-slate-500/15 text-slate-500',
+};
+
+function CyclesTab() {
+    const { allCycles } = useCycle();
+    const [cycles, setCycles] = useState<Cycle[]>(allCycles);
+    const [showCreate, setShowCreate] = useState(false);
+    const [error, setError] = useState('');
+    const [creating, setCreating] = useState(false);
+
+    // Sync with context when it updates
+    useEffect(() => { setCycles(allCycles); }, [allCycles]);
+
+    // Form state
+    const [name, setName] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [status, setStatus] = useState<CycleStatus>('planning');
+    const [quarters, setQuarters] = useState<Array<{
+        name: string;
+        startDate: string;
+        endDate: string;
+        reviewDeadline: string;
+    }>>([]);
+
+    const resetForm = () => {
+        setName('');
+        setStartDate('');
+        setEndDate('');
+        setStatus('planning');
+        setQuarters([]);
+        setError('');
+    };
+
+    const addQuarter = () => {
+        const qNum = quarters.length + 1;
+        setQuarters(prev => [...prev, {
+            name: `Q${qNum}`,
+            startDate: '',
+            endDate: '',
+            reviewDeadline: '',
+        }]);
+    };
+
+    const updateQuarter = (index: number, field: string, value: string) => {
+        setQuarters(prev => prev.map((q, i) =>
+            i === index ? { ...q, [field]: value } : q
+        ));
+    };
+
+    const removeQuarter = (index: number) => {
+        setQuarters(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleCreate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (quarters.length === 0) {
+            setError('At least one quarter is required');
+            return;
+        }
+        setError('');
+        setCreating(true);
+        try {
+            const { data } = await adminApi.createCycle({
+                name,
+                startDate,
+                endDate,
+                status,
+                quarters,
+            });
+            setCycles(prev => [...prev, data]);
+            resetForm();
+            setShowCreate(false);
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to create cycle'));
+        } finally {
+            setCreating(false);
+        }
+    };
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full max-w-md rounded-2xl bg-surface-raised border border-slate-700 p-6 shadow-xl">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-200 transition-colors">
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-                {children}
+        <div>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-100">Objective Cycles</h3>
+                <button
+                    onClick={() => { resetForm(); setShowCreate(true); }}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
+                >
+                    + New Cycle
+                </button>
             </div>
+
+            {cycles.length === 0 ? (
+                <div className="rounded-xl bg-surface-raised border border-slate-700 p-8 text-center">
+                    <p className="text-slate-500">No cycles configured yet.</p>
+                    <p className="text-sm text-slate-600 mt-1">Create a cycle to enable objective tracking for your organisation.</p>
+                </div>
+            ) : (
+                <div className="grid gap-4">
+                    {cycles.map(cycle => (
+                        <div key={cycle.id} className="rounded-xl bg-surface-raised border border-slate-700 p-5">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                    <h4 className="text-base font-semibold text-slate-200">{cycle.name}</h4>
+                                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${CYCLE_STATUS_STYLES[cycle.status]}`}>
+                                        {cycle.status}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    {formatDate(cycle.startDate)} — {formatDate(cycle.endDate)}
+                                </p>
+                            </div>
+
+                            {cycle.quarters.length > 0 && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                    {cycle.quarters.map(q => {
+                                        const isCurrentQuarter = isQuarterActive(q.startDate, q.endDate);
+                                        return (
+                                            <div
+                                                key={q.id ?? q.name}
+                                                className={`rounded-lg border p-3 text-xs ${isCurrentQuarter
+                                                        ? 'border-indigo-500/30 bg-indigo-500/10'
+                                                        : 'border-slate-700/50 bg-surface'
+                                                    }`}
+                                            >
+                                                <p className={`font-medium ${isCurrentQuarter ? 'text-indigo-300' : 'text-slate-300'}`}>
+                                                    {q.name}
+                                                    {isCurrentQuarter && <span className="ml-1 text-indigo-400">(current)</span>}
+                                                </p>
+                                                <p className="text-slate-500 mt-0.5">
+                                                    {formatDate(q.startDate)} — {formatDate(q.endDate)}
+                                                </p>
+                                                <p className="text-slate-600 mt-0.5">
+                                                    Review by {formatDate(q.reviewDeadline)}
+                                                </p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Create cycle modal */}
+            <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Create Cycle" maxWidth="max-w-2xl">
+                <form onSubmit={handleCreate} className="space-y-4">
+                    {error && (
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">{error}</div>
+                    )}
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Cycle Name</label>
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            required
+                            maxLength={50}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            placeholder="e.g. FY2025"
+                        />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Start Date</label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={e => setStartDate(e.target.value)}
+                                required
+                                className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">End Date</label>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={e => setEndDate(e.target.value)}
+                                required
+                                className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Status</label>
+                            <select
+                                value={status}
+                                onChange={e => setStatus(e.target.value as CycleStatus)}
+                                className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            >
+                                <option value="planning">Planning</option>
+                                <option value="active">Active</option>
+                                <option value="review">Review</option>
+                                <option value="closed">Closed</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Quarters */}
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-slate-300">Quarters</label>
+                            <button
+                                type="button"
+                                onClick={addQuarter}
+                                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                            >
+                                + Add Quarter
+                            </button>
+                        </div>
+
+                        {quarters.length === 0 ? (
+                            <p className="text-xs text-slate-500 border border-dashed border-slate-700 rounded-lg p-4 text-center">
+                                No quarters added yet. Click &quot;+ Add Quarter&quot; to get started.
+                            </p>
+                        ) : (
+                            <div className="space-y-3">
+                                {quarters.map((q, i) => (
+                                    <div key={i} className="rounded-lg border border-slate-700 p-3">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <input
+                                                type="text"
+                                                value={q.name}
+                                                onChange={e => updateQuarter(i, 'name', e.target.value)}
+                                                required
+                                                className="rounded bg-surface border border-slate-700 px-2 py-1 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none w-24"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeQuarter(i)}
+                                                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div>
+                                                <label className="block text-xs text-slate-500 mb-0.5">Start</label>
+                                                <input
+                                                    type="date"
+                                                    value={q.startDate}
+                                                    onChange={e => updateQuarter(i, 'startDate', e.target.value)}
+                                                    required
+                                                    className="w-full rounded bg-surface border border-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-500 mb-0.5">End</label>
+                                                <input
+                                                    type="date"
+                                                    value={q.endDate}
+                                                    onChange={e => updateQuarter(i, 'endDate', e.target.value)}
+                                                    required
+                                                    className="w-full rounded bg-surface border border-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-500 mb-0.5">Review deadline</label>
+                                                <input
+                                                    type="date"
+                                                    value={q.reviewDeadline}
+                                                    onChange={e => updateQuarter(i, 'reviewDeadline', e.target.value)}
+                                                    required
+                                                    className="w-full rounded bg-surface border border-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setShowCreate(false)}
+                            className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={creating || !name.trim() || quarters.length === 0}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                        >
+                            {creating ? 'Creating...' : 'Create Cycle'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
+}
+
+// ── Helpers ────────────────────────────────────────────────
+
+function formatDate(dateStr: string): string {
+    try {
+        return new Date(dateStr).toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        });
+    } catch {
+        return dateStr;
+    }
+}
+
+function isQuarterActive(startDate: string, endDate: string): boolean {
+    const now = new Date();
+    return now >= new Date(startDate) && now <= new Date(endDate);
+}
+
+const LEVEL_LABELS: Record<number, string> = {
+    1: 'CTO / VP',
+    2: 'Group Head',
+    3: 'Tech Lead',
+    4: 'Team Lead',
+    5: 'IC',
+};
+
+function levelLabel(level: number): string {
+    return LEVEL_LABELS[level] ?? `Level ${level}`;
+}
+
+/** Get all IDs in a user's downward tree (including the user themselves) */
+function getDownwardIds(userId: string, users: User[]): Set<string> {
+    const result = new Set<string>([userId]);
+    const queue = [userId];
+    while (queue.length > 0) {
+        const current = queue.shift()!;
+        for (const u of users) {
+            if (u.managerId === current && !result.has(u.id)) {
+                result.add(u.id);
+                queue.push(u.id);
+            }
+        }
+    }
+    return result;
 }

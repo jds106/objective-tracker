@@ -10,6 +10,7 @@ export interface User {
   managerId: string | null;
   level: number;
   department?: string;
+  avatarUrl?: string;
   role: UserRole;
   createdAt: string;
   updatedAt: string;

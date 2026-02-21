@@ -14,6 +14,8 @@ function testConfig(dataDir: string): Config {
     DATA_DIR: dataDir,
     JWT_SECRET: 'test-secret-that-is-at-least-32-characters-long',
     JWT_EXPIRY: '1h',
+    FRONTEND_URL: 'http://localhost:5173',
+    BCRYPT_SALT_ROUNDS: 4,
   };
 }
 

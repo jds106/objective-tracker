@@ -8,6 +8,7 @@ import type { KeyResultService } from '../services/key-result.service.js';
 import type { CheckInService } from '../services/check-in.service.js';
 import type { CycleService } from '../services/cycle.service.js';
 import type { CascadeService } from '../services/cascade.service.js';
+import type { RateLimiters } from '../middleware/rate-limit.middleware.js';
 import { createAuthRoutes } from './auth.routes.js';
 import { createUserRoutes } from './user.routes.js';
 import { createObjectiveRoutes } from './objective.routes.js';
@@ -27,6 +28,9 @@ export interface RouteDependencies {
   cycleService: CycleService;
   cascadeService: CascadeService;
   passwordResetService: PasswordResetService;
+  rateLimiters: RateLimiters;
+  dataDir: string;
+  saltRounds: number;
 }
 
 export function createRoutes(deps: RouteDependencies): Router {

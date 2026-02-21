@@ -19,4 +19,8 @@ export class CycleService {
     if (!cycle) throw new NotFoundError('Cycle not found');
     return cycle;
   }
+
+  async create(input: Omit<Cycle, 'id'>): Promise<Cycle> {
+    return this.cycleRepo.create(input);
+  }
 }

@@ -1,13 +1,12 @@
 import { Router } from 'express';
-import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
-import { updateUserAdminSchema, companyObjectiveSchema } from '@objective-tracker/shared';
+import { updateUserAdminSchema, companyObjectiveSchema, adminCreateUserSchema, createCycleSchema, NotFoundError } from '@objective-tracker/shared';
 import { validate } from '../middleware/validate.middleware.js';
 import { createAuthMiddleware } from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/require-admin.middleware.js';
+import { PasswordAuthProvider } from '../auth/password-auth.provider.js';
+import { logger } from '../logger.js';
 import type { RouteDependencies } from './index.js';
-
-const SALT_ROUNDS = 12;
 
 export function createAdminRoutes(deps: RouteDependencies): Router {
     const router = Router();
@@ -17,6 +16,33 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
     router.use(auth, requireAdmin);
 
     // ── User Management ────────────────────────────────────────
+
+    /** Create a new user */
+    router.post('/users', validate(adminCreateUserSchema), async (req, res, next) => {
+        try {
+            const { password, ...userData } = req.body;
+            const existing = await deps.userRepo.getByEmail(userData.email);
+            if (existing) {
+                res.status(409).json({ error: 'An account with this email already exists' });
+                return;
+            }
+            const passwordHash = await PasswordAuthProvider.hashPassword(password, deps.saltRounds);
+            const user = await deps.userRepo.create({
+                email: userData.email,
+                displayName: userData.displayName,
+                jobTitle: userData.jobTitle,
+                managerId: userData.managerId ?? null,
+                level: userData.level ?? 5,
+                department: userData.department,
+                role: userData.role ?? 'standard',
+                passwordHash,
+            });
+            logger.info({ adminId: req.user!.id, createdUserId: user.id }, 'Admin created new user');
+            res.status(201).json({ data: user });
+        } catch (err) {
+            next(err);
+        }
+    });
 
     /** List all users */
     router.get('/users', async (req, res, next) => {
@@ -32,6 +58,7 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
     router.put('/users/:id', validate(updateUserAdminSchema), async (req, res, next) => {
         try {
             const user = await deps.userRepo.update(req.params.id, req.body);
+            logger.info({ adminId: req.user!.id, targetUserId: req.params.id, changes: Object.keys(req.body) }, 'Admin updated user');
             res.json({ data: user });
         } catch (err) {
             next(err);
@@ -46,6 +73,7 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
                 return;
             }
             await deps.userRepo.delete(req.params.id);
+            logger.info({ adminId: req.user!.id, deletedUserId: req.params.id }, 'Admin deleted user');
             res.status(204).send();
         } catch (err) {
             next(err);
@@ -56,14 +84,32 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
     router.post('/users/:id/reset-password', async (req, res, next) => {
         try {
             const tempPassword = randomBytes(12).toString('base64url');
-            const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
+            const passwordHash = await PasswordAuthProvider.hashPassword(tempPassword, deps.saltRounds);
             await deps.userRepo.updatePassword(req.params.id, passwordHash);
+            logger.info({ adminId: req.user!.id, targetUserId: req.params.id }, 'Admin triggered password reset');
             res.json({
                 data: {
                     message: 'Password has been reset.',
                     temporaryPassword: tempPassword,
                 },
             });
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    /** Admin-set password — set a specific password for a user */
+    router.put('/users/:id/password', async (req, res, next) => {
+        try {
+            const { password } = req.body;
+            if (!password || typeof password !== 'string' || password.length < 8) {
+                res.status(400).json({ error: 'Password must be at least 8 characters' });
+                return;
+            }
+            const passwordHash = await PasswordAuthProvider.hashPassword(password, deps.saltRounds);
+            await deps.userRepo.updatePassword(req.params.id, passwordHash);
+            logger.info({ adminId: req.user!.id, targetUserId: req.params.id }, 'Admin set user password');
+            res.json({ data: { message: 'Password has been set.' } });
         } catch (err) {
             next(err);
         }
@@ -82,14 +128,29 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
                 const objectives = await deps.objectiveService.getByUserId(user.id, cycleId);
                 allObjectives.push(...objectives);
             }
-            // Also get company-level objectives
+            // Also get company-level objectives — only swallow NotFoundError
             try {
                 const companyObjectives = await deps.objectiveService.getByUserId('company', cycleId);
                 allObjectives.push(...companyObjectives);
-            } catch {
-                // No company objectives yet — fine
+            } catch (err) {
+                if (!(err instanceof NotFoundError)) {
+                    throw err;
+                }
             }
             res.json({ data: allObjectives });
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // ── Cycles ────────────────────────────────────────────────
+
+    /** Create a new objective cycle */
+    router.post('/cycles', validate(createCycleSchema), async (req, res, next) => {
+        try {
+            const cycle = await deps.cycleService.create(req.body);
+            logger.info({ adminId: req.user!.id, cycleId: cycle.id }, 'Admin created cycle');
+            res.status(201).json({ data: cycle });
         } catch (err) {
             next(err);
         }

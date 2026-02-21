@@ -21,6 +21,7 @@ export interface UpdateUserInput {
   managerId?: string | null;
   level?: number;
   department?: string;
+  avatarUrl?: string | null;
   role?: UserRole;
 }
 

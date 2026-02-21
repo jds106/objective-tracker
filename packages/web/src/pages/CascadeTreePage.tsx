@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react';
-import type { ObjectiveStatus, HealthStatus } from '@objective-tracker/shared';
+import type { ObjectiveStatus, HealthStatus, Cycle } from '@objective-tracker/shared';
 import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
 import { useCycle } from '../contexts/cycle.context.js';
 import { useCascadeTree } from '../hooks/useCascadeTree.js';
-import { CascadeTree } from '../components/cascade/CascadeTree.js';
+import { useDebounce } from '../hooks/useDebounce.js';
+import { D3CascadeTree } from '../components/cascade/D3CascadeTree.js';
 import { CascadeFilters } from '../components/cascade/CascadeFilters.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
+import { PageTransition } from '../components/PageTransition.js';
 import type { CascadeNode } from '../services/cascade.api.js';
 
 function filterNode(
@@ -13,9 +16,10 @@ function filterNode(
   search: string,
   statusFilter: ObjectiveStatus | '',
   healthFilter: HealthStatus | '',
+  activeCycle: Cycle | null,
 ): CascadeNode | null {
   const filteredChildren = node.children
-    .map(child => filterNode(child, search, statusFilter, healthFilter))
+    .map(child => filterNode(child, search, statusFilter, healthFilter, activeCycle))
     .filter((n): n is CascadeNode => n !== null);
 
   const matchesSearch = !search
@@ -26,7 +30,7 @@ function filterNode(
 
   const progress = calculateObjectiveProgress(node.objective.keyResults.map(kr => kr.progress));
   const allCheckIns = node.objective.keyResults.flatMap(kr => kr.checkIns);
-  const health = calculateHealthStatus(progress, null, allCheckIns);
+  const health = calculateHealthStatus(progress, activeCycle, allCheckIns);
   const matchesHealth = !healthFilter || health === healthFilter;
 
   const selfMatches = matchesSearch && matchesStatus && matchesHealth;
@@ -40,18 +44,19 @@ function filterNode(
 
 export function CascadeTreePage() {
   const { activeCycle } = useCycle();
-  const { tree, isLoading } = useCascadeTree(activeCycle?.id);
+  const { tree, isLoading, error, refetch } = useCascadeTree(activeCycle?.id);
 
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 250);
   const [statusFilter, setStatusFilter] = useState<ObjectiveStatus | ''>('');
   const [healthFilter, setHealthFilter] = useState<HealthStatus | ''>('');
 
   const filteredTree = useMemo(() => {
-    if (!search && !statusFilter && !healthFilter) return tree;
+    if (!debouncedSearch && !statusFilter && !healthFilter) return tree;
     return tree
-      .map(node => filterNode(node, search, statusFilter, healthFilter))
+      .map(node => filterNode(node, debouncedSearch, statusFilter, healthFilter, activeCycle))
       .filter((n): n is CascadeNode => n !== null);
-  }, [tree, search, statusFilter, healthFilter]);
+  }, [tree, debouncedSearch, statusFilter, healthFilter, activeCycle]);
 
   if (isLoading) {
     return (
@@ -62,26 +67,36 @@ export function CascadeTreePage() {
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-slate-100">Cascade View</h2>
-      <p className="mt-1 text-slate-400">
-        See how objectives cascade through the organisation.
-      </p>
+    <PageTransition className="flex flex-col h-[calc(100vh-4rem)]">
+      <div className="shrink-0">
+        <h2 className="text-2xl font-bold text-slate-100">Cascade View</h2>
+        <p className="mt-1 text-slate-400">
+          See how objectives cascade through the organisation.
+        </p>
 
-      <div className="mt-6">
-        <CascadeFilters
-          search={search}
-          onSearchChange={setSearch}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          healthFilter={healthFilter}
-          onHealthFilterChange={setHealthFilter}
-        />
+        {error && (
+          <ErrorAlert
+            message="Failed to load the cascade tree. Please try again."
+            onRetry={refetch}
+            className="mt-4"
+          />
+        )}
+
+        <div className="mt-6">
+          <CascadeFilters
+            search={search}
+            onSearchChange={setSearch}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            healthFilter={healthFilter}
+            onHealthFilterChange={setHealthFilter}
+          />
+        </div>
       </div>
 
-      <div className="mt-6">
-        <CascadeTree nodes={filteredTree} />
+      <div className="mt-6 flex-1 min-h-0">
+        <D3CascadeTree nodes={filteredTree} />
       </div>
-    </div>
+    </PageTransition>
   );
 }

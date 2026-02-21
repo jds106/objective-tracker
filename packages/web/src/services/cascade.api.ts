@@ -3,7 +3,7 @@ import { apiClient } from './api-client.js';
 
 export interface CascadeNode {
   objective: Objective;
-  owner: { id: string; displayName: string; jobTitle: string; level: number };
+  owner: { id: string; displayName: string; jobTitle: string; level: number; avatarUrl?: string };
   children: CascadeNode[];
 }
 

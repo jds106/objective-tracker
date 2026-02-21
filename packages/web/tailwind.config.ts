@@ -5,6 +5,9 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+      },
       colors: {
         surface: {
           DEFAULT: '#0f172a',
@@ -17,6 +20,15 @@ export default {
           behind: '#ef4444',
           'not-started': '#64748b',
         },
+      },
+      keyframes: {
+        'slide-in-left': {
+          from: { transform: 'translateX(-100%)' },
+          to: { transform: 'translateX(0)' },
+        },
+      },
+      animation: {
+        'slide-in-left': 'slide-in-left 0.2s ease-out',
       },
     },
   },

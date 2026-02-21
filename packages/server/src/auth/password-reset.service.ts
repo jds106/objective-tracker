@@ -5,7 +5,7 @@ import { ValidationError } from '@objective-tracker/shared';
 import type { NotificationService } from '../services/notification.service.js';
 import { logger } from '../logger.js';
 
-const SALT_ROUNDS = 12;
+const DEFAULT_SALT_ROUNDS = 12;
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
 interface ResetTokenEntry {
@@ -16,11 +16,15 @@ interface ResetTokenEntry {
 
 export class PasswordResetService {
     private readonly tokens = new Map<string, ResetTokenEntry>();
+    private readonly saltRounds: number;
 
     constructor(
         private readonly userRepo: UserRepository,
         private readonly notificationService: NotificationService,
-    ) { }
+        saltRounds?: number,
+    ) {
+        this.saltRounds = saltRounds ?? DEFAULT_SALT_ROUNDS;
+    }
 
     /**
      * Request a password reset for the given email.
@@ -62,7 +66,7 @@ export class PasswordResetService {
             throw new ValidationError('Invalid or expired reset token');
         }
 
-        const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+        const passwordHash = await bcrypt.hash(newPassword, this.saltRounds);
         await this.userRepo.updatePassword(entry.userId, passwordHash);
 
         // Consume the token so it can't be reused

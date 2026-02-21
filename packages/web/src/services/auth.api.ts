@@ -11,6 +11,7 @@ export interface RegisterFormData {
   displayName: string;
   jobTitle: string;
   managerId?: string | null;
+  managerEmail?: string;
   level?: number;
   department?: string;
 }

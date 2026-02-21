@@ -23,13 +23,15 @@ export function CascadeFilters({
         type="text"
         value={search}
         onChange={e => onSearchChange(e.target.value)}
-        placeholder="Search objectives..."
-        className="rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none w-64"
+        placeholder="Search objectives…"
+        aria-label="Search objectives"
+        className="rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none w-full sm:w-64"
       />
 
       <select
         value={statusFilter}
         onChange={e => onStatusFilterChange(e.target.value as ObjectiveStatus | '')}
+        aria-label="Filter by status"
         className="rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
       >
         <option value="">All statuses</option>
@@ -42,6 +44,7 @@ export function CascadeFilters({
       <select
         value={healthFilter}
         onChange={e => onHealthFilterChange(e.target.value as HealthStatus | '')}
+        aria-label="Filter by health"
         className="rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
       >
         <option value="">All health</option>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { CreateObjectiveBody, UpdateObjectiveBody } from '@objective-tracker/shared';
 import { calculateObjectiveProgress, calculateHealthStatus, type HealthStatus } from '@objective-tracker/shared';
 import { useAuth } from '../contexts/auth.context.js';
@@ -10,7 +11,9 @@ import { RecentActivity } from '../components/dashboard/RecentActivity.js';
 import { CreateObjectiveButton } from '../components/dashboard/CreateObjectiveButton.js';
 import { ObjectiveFormModal } from '../components/objectives/ObjectiveFormModal.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
+import { PageTransition } from '../components/PageTransition.js';
 
 const healthOrder: Record<HealthStatus, number> = {
   behind: 0,
@@ -22,7 +25,7 @@ const healthOrder: Record<HealthStatus, number> = {
 export function DashboardPage() {
   const { user } = useAuth();
   const { activeCycle } = useCycle();
-  const { objectives, isLoading, create } = useObjectives(activeCycle?.id);
+  const { objectives, isLoading, error, refetch, create } = useObjectives(activeCycle?.id);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const handleCreate = async (input: CreateObjectiveBody | UpdateObjectiveBody) => {
@@ -48,13 +51,45 @@ export function DashboardPage() {
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-slate-100">
+    <PageTransition>
+      <h2 className="text-3xl font-bold tracking-tight text-slate-100">
         Welcome back, {user?.displayName}
       </h2>
       <p className="mt-1 text-slate-400">
-        {activeCycle ? activeCycle.name : 'No active cycle'}
+        {activeCycle
+          ? (activeCycle.quarters.find(q => {
+              const now = new Date();
+              return now >= new Date(q.startDate) && now <= new Date(q.endDate);
+            })?.name ?? activeCycle.name)
+          : 'No active cycle'}
       </p>
+
+      {error && (
+        <ErrorAlert
+          message="Failed to load your objectives. Please try again."
+          onRetry={refetch}
+          className="mt-4"
+        />
+      )}
+
+      {!activeCycle && !isLoading && (
+        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+          <div className="flex items-start gap-3">
+            <svg className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <div className="text-sm text-amber-300">
+              <p className="font-medium">No active cycle</p>
+              <p className="mt-1 text-amber-400/80">
+                Objectives can only be created within an active cycle.
+                {user?.role === 'admin'
+                  ? ' Go to the Admin panel to create one.'
+                  : ' Contact your administrator to set up an objective cycle.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6">
         <StatCards objectives={objectives} />
@@ -63,6 +98,17 @@ export function DashboardPage() {
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-100">My Objectives</h3>
+          {objectives.some(o => o.keyResults.length > 0) && (
+            <Link
+              to="/check-in"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Check in on all
+            </Link>
+          )}
         </div>
 
         {objectives.length === 0 ? (
@@ -110,6 +156,6 @@ export function DashboardPage() {
           cycleId={activeCycle.id}
         />
       )}
-    </div>
+    </PageTransition>
   );
 }

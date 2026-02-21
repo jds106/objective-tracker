@@ -12,6 +12,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (input: RegisterFormData) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -53,6 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apiClient.setToken(data.token);
   }, []);
 
+  const updateUser = useCallback((updatedUser: User) => {
+    setUser(updatedUser);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
@@ -65,6 +70,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apiClient.setToken(null);
   }, []);
 
+  // BUG-007: Auto-logout when API returns 401 (expired/revoked token)
+  useEffect(() => {
+    apiClient.onUnauthorisedResponse(() => {
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem('token');
+      apiClient.setToken(null);
+    });
+  }, []);
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -74,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       logout,
+      updateUser,
     }}>
       {children}
     </AuthContext.Provider>

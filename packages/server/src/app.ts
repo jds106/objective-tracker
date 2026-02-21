@@ -1,6 +1,10 @@
+import { join } from 'node:path';
 import express, { type Express } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import pinoHttp from 'pino-http';
 import type { Config } from './config.js';
+import { createRateLimiters } from './middleware/rate-limit.middleware.js';
 import {
   JsonUserRepository,
   JsonObjectiveRepository,
@@ -20,12 +24,36 @@ import {
 import { ConsoleNotificationService } from './services/index.js';
 import { createRoutes } from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.middleware.js';
+import { logger } from './logger.js';
 
 export async function createApp(config: Config): Promise<Express> {
   const app = express();
 
-  app.use(cors());
+  // ── Security middleware ──────────────────────────────────────
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:'],
+        scriptSrc: ["'self'"],
+      },
+    },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
+  app.use(cors({
+    origin: config.FRONTEND_URL,
+    credentials: true,
+  }));
+
+  // ── Request logging ──────────────────────────────────────────
+  app.use(pinoHttp({ logger }));
+
+  // ── Body parsing ─────────────────────────────────────────────
   app.use(express.json());
+  app.use('/avatars', express.static(join(config.DATA_DIR, 'avatars')));
+
+  // ── Rate limiting ────────────────────────────────────────────
+  const rateLimiters = createRateLimiters();
 
   // Initialise repositories
   const userRepo = new JsonUserRepository(config.DATA_DIR);
@@ -41,7 +69,7 @@ export async function createApp(config: Config): Promise<Express> {
   // Initialise auth
   const jwtService = new JwtService(config);
   const tokenBlacklist = new TokenBlacklist();
-  const authProvider = new PasswordAuthProvider(userRepo, jwtService, tokenBlacklist);
+  const authProvider = new PasswordAuthProvider(userRepo, jwtService, tokenBlacklist, config.BCRYPT_SALT_ROUNDS);
 
   // Initialise services
   const visibilityService = new VisibilityService(userRepo);
@@ -50,9 +78,9 @@ export async function createApp(config: Config): Promise<Express> {
   const keyResultService = new KeyResultService(keyResultRepo, objectiveRepo);
   const checkInService = new CheckInService(keyResultRepo);
   const cycleService = new CycleService(cycleRepo);
-  const cascadeService = new CascadeService(userRepo, objectiveRepo);
-  const notificationService = new ConsoleNotificationService();
-  const passwordResetService = new PasswordResetService(userRepo, notificationService);
+  const cascadeService = new CascadeService(userRepo, objectiveRepo, visibilityService);
+  const notificationService = new ConsoleNotificationService(config.FRONTEND_URL);
+  const passwordResetService = new PasswordResetService(userRepo, notificationService, config.BCRYPT_SALT_ROUNDS);
 
   // Mount routes
   const routes = createRoutes({
@@ -66,6 +94,9 @@ export async function createApp(config: Config): Promise<Express> {
     cycleService,
     cascadeService,
     passwordResetService,
+    rateLimiters,
+    dataDir: config.DATA_DIR,
+    saltRounds: config.BCRYPT_SALT_ROUNDS,
   });
 
   app.use('/api', routes);

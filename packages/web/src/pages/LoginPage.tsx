@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/auth.context.js';
-import { ApiError } from '../services/api-client.js';
+import { getErrorMessage } from '../utils/error.js';
 
 export function LoginPage() {
   const { login, isAuthenticated } = useAuth();
@@ -15,8 +15,7 @@ export function LoginPage() {
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard';
 
   if (isAuthenticated) {
-    navigate(from, { replace: true });
-    return null;
+    return <Navigate to={from} replace />;
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -27,11 +26,7 @@ export function LoginPage() {
       await login(email, password);
       navigate(from, { replace: true });
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('An unexpected error occurred');
-      }
+      setError(getErrorMessage(err, 'An unexpected error occurred'));
     } finally {
       setIsSubmitting(false);
     }
@@ -41,7 +36,8 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-indigo-400">Objective Tracker</h1>
+          <img src="/logo.png" alt="North Star" className="mx-auto h-24 w-auto rounded-2xl" />
+          <h1 className="mt-4 text-3xl font-bold text-indigo-400">North Star</h1>
           <p className="mt-2 text-sm text-slate-400">Sign in to your account</p>
         </div>
 
@@ -54,15 +50,15 @@ export function LoginPage() {
 
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-slate-300">
-              Email address
+              Email or username
             </label>
             <input
               id="email"
-              type="email"
+              type="text"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-slate-600 bg-surface px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-lg border border-slate-600 bg-surface px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:shadow-sm focus:shadow-indigo-500/20"
               placeholder="you@company.com"
             />
           </div>
@@ -75,10 +71,9 @@ export function LoginPage() {
               id="password"
               type="password"
               required
-              minLength={8}
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-slate-600 bg-surface px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-lg border border-slate-600 bg-surface px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:shadow-sm focus:shadow-indigo-500/20"
               placeholder="••••••••"
             />
           </div>

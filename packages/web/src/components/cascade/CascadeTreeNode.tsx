@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
 import type { CascadeNode } from '../../services/cascade.api.js';
+import { useCycle } from '../../contexts/cycle.context.js';
 import { ProgressRing } from '../ProgressRing.js';
 import { HealthBadge } from '../HealthBadge.js';
 
@@ -9,9 +10,10 @@ interface CascadeTreeNodeProps {
 }
 
 export function CascadeTreeNode({ node }: CascadeTreeNodeProps) {
+  const { activeCycle } = useCycle();
   const progress = calculateObjectiveProgress(node.objective.keyResults.map(kr => kr.progress));
   const allCheckIns = node.objective.keyResults.flatMap(kr => kr.checkIns);
-  const health = calculateHealthStatus(progress, null, allCheckIns);
+  const health = calculateHealthStatus(progress, activeCycle, allCheckIns);
 
   return (
     <Link

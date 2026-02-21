@@ -1,0 +1,81 @@
+import { useCycle } from '../contexts/cycle.context.js';
+import { useReports } from '../hooks/useReports.js';
+import { useObjectives } from '../hooks/useObjectives.js';
+import { useTeamData } from '../hooks/useTeamData.js';
+import { ReportCard } from '../components/team/ReportCard.js';
+import { KrSupportSummary } from '../components/team/KrSupportSummary.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
+import { LoadingSpinner } from '../components/LoadingSpinner.js';
+import { EmptyState } from '../components/EmptyState.js';
+import { PageTransition } from '../components/PageTransition.js';
+
+export function TeamPage() {
+  const { activeCycle } = useCycle();
+  const { reports, isLoading: reportsLoading, error: reportsError } = useReports();
+  const { objectives: myObjectives } = useObjectives(activeCycle?.id);
+  const { reportData, isLoading: teamLoading, error: teamError } = useTeamData(reports, activeCycle?.id);
+
+  const isLoading = reportsLoading || teamLoading;
+  const error = reportsError || teamError;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (reports.length === 0) {
+    return (
+      <EmptyState
+        icon={
+          <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+          </svg>
+        }
+        title="No direct reports"
+        description="You don't have any direct reports in the organisation."
+      />
+    );
+  }
+
+  const allReportObjectives = reportData.flatMap(rd => rd.objectives);
+
+  return (
+    <PageTransition>
+      <h2 className="text-2xl font-bold text-slate-100">Team</h2>
+      <p className="mt-1 text-slate-400">
+        {reports.length} direct {reports.length === 1 ? 'report' : 'reports'}
+      </p>
+
+      {error && (
+        <ErrorAlert
+          message="Failed to load team data. Some information may be incomplete."
+          className="mt-4"
+        />
+      )}
+
+      {myObjectives.length > 0 && allReportObjectives.length > 0 && (
+        <div className="mt-6">
+          <KrSupportSummary
+            managerObjectives={myObjectives}
+            reportObjectives={allReportObjectives}
+          />
+        </div>
+      )}
+
+      <div className="mt-6 space-y-3">
+        <h3 className="text-lg font-semibold text-slate-100">Direct Reports</h3>
+        {reportData.map(rd => (
+          <ReportCard
+            key={rd.user.id}
+            user={rd.user}
+            objectives={rd.objectives}
+            cycle={activeCycle}
+          />
+        ))}
+      </div>
+    </PageTransition>
+  );
+}
