@@ -7,7 +7,7 @@ export function useCascadeTree(cycleId?: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(async () => {
+  const loadTree = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -20,7 +20,7 @@ export function useCascadeTree(cycleId?: string) {
     }
   }, [cycleId]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { loadTree(); }, [loadTree]);
 
-  return { tree, isLoading, error, refetch: fetch };
+  return { tree, isLoading, error, refetch: loadTree };
 }

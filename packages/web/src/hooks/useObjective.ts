@@ -8,7 +8,7 @@ export function useObjective(id: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(async () => {
+  const loadObjective = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -22,7 +22,7 @@ export function useObjective(id: string) {
     }
   }, [id]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { loadObjective(); }, [loadObjective]);
 
-  return { objective, canEdit, isLoading, error, refetch: fetch };
+  return { objective, canEdit, isLoading, error, refetch: loadObjective };
 }

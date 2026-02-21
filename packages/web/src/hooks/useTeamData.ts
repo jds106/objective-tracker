@@ -40,11 +40,6 @@ export function useTeamData(reports: User[], cycleId?: string) {
       }
       setReportData(data);
       setIsLoading(false);
-    }).catch(err => {
-      if (!cancelled) {
-        setError(err instanceof Error ? err.message : 'Failed to load team data');
-        setIsLoading(false);
-      }
     });
 
     return () => { cancelled = true; };

@@ -21,27 +21,29 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function load() {
-      try {
-        const [activeRes, allRes] = await Promise.allSettled([
-          cyclesApi.getActiveCycle(),
-          cyclesApi.getAllCycles(),
-        ]);
+      const [activeRes, allRes] = await Promise.allSettled([
+        cyclesApi.getActiveCycle(),
+        cyclesApi.getAllCycles(),
+      ]);
 
-        if (cancelled) return;
+      if (cancelled) return;
 
-        if (activeRes.status === 'fulfilled') {
-          setActiveCycle(activeRes.value.data);
-        }
-        if (allRes.status === 'fulfilled') {
-          setAllCycles(allRes.value.data);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load cycles');
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
+      if (activeRes.status === 'fulfilled') {
+        setActiveCycle(activeRes.value.data);
       }
+      if (allRes.status === 'fulfilled') {
+        setAllCycles(allRes.value.data);
+      }
+
+      // Surface error only if both requests failed
+      if (activeRes.status === 'rejected' && allRes.status === 'rejected') {
+        const msg = activeRes.reason instanceof Error
+          ? activeRes.reason.message
+          : 'Failed to load cycles';
+        setError(msg);
+      }
+
+      setIsLoading(false);
     }
 
     load();

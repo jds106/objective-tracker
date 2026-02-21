@@ -11,7 +11,7 @@ export function useObjectives(cycleId?: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(async () => {
+  const loadObjectives = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -24,7 +24,7 @@ export function useObjectives(cycleId?: string) {
     }
   }, [cycleId]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { loadObjectives(); }, [loadObjectives]);
 
   const create = useCallback(async (input: CreateObjectiveBody) => {
     const { data } = await objectivesApi.createObjective(input);
@@ -43,5 +43,5 @@ export function useObjectives(cycleId?: string) {
     setObjectives(prev => prev.filter(o => o.id !== id));
   }, []);
 
-  return { objectives, isLoading, error, refetch: fetch, create, update, remove };
+  return { objectives, isLoading, error, refetch: loadObjectives, create, update, remove };
 }

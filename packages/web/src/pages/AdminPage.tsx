@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { User, Objective, Cycle, CycleStatus, UpdateObjectiveBody } from '@objective-tracker/shared';
+import { formatDate } from '@objective-tracker/shared';
 import { useAuth } from '../contexts/auth.context.js';
 import { useCycle } from '../contexts/cycle.context.js';
 import { Modal } from '../components/Modal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
+import { ProgressRing } from '../components/ProgressRing.js';
 import { PageTransition } from '../components/PageTransition.js';
 import { useDebounce } from '../hooks/useDebounce.js';
 import { getErrorMessage } from '../utils/error.js';
@@ -69,6 +71,7 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
     const [editUser, setEditUser] = useState<User | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [showCsvImport, setShowCsvImport] = useState(false);
     const PAGE_SIZE = 25;
 
     const fetchUsers = useCallback(async () => {
@@ -174,6 +177,12 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
                     className="flex-1 max-w-md rounded-lg bg-surface-raised border border-slate-700 px-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
                 />
                 <button
+                    onClick={() => setShowCsvImport(true)}
+                    className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors shrink-0"
+                >
+                    Import CSV
+                </button>
+                <button
                     onClick={() => setShowCreateUser(true)}
                     className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors shrink-0"
                 >
@@ -209,13 +218,17 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
                                     <td className="px-4 py-3">
                                         <button
                                             onClick={() => handleRoleToggle(user)}
-                                            disabled={actionLoading === `role-${user.id}`}
-                                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 ${user.role === 'admin'
+                                            disabled={actionLoading === `role-${user.id}` || user.id === currentUserId}
+                                            title={user.id === currentUserId ? 'Cannot change your own role' : `Click to change role to ${user.role === 'admin' ? 'standard' : 'admin'}`}
+                                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${user.id === currentUserId
+                                                    ? 'cursor-not-allowed'
+                                                    : 'cursor-pointer'
+                                                } ${user.role === 'admin'
                                                     ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
                                                     : 'bg-slate-500/15 text-slate-400 hover:bg-slate-500/25'
                                                 }`}
                                         >
-                                            {actionLoading === `role-${user.id}` ? '...' : user.role}
+                                            {actionLoading === `role-${user.id}` ? '…' : user.role}
                                         </button>
                                     </td>
                                     <td className="px-4 py-3 text-slate-400 hidden md:table-cell">
@@ -1194,14 +1207,7 @@ function ObjectiveRow({ objective, isCompany, userMap, onEdit, onDelete }: {
         <div className="rounded-xl bg-surface-raised border border-slate-700 p-4 flex items-center gap-4">
             {/* Progress ring */}
             <div className="shrink-0">
-                <svg className="h-10 w-10 -rotate-90" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-700" />
-                    <circle
-                        cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="2"
-                        strokeDasharray={`${progress} ${100 - progress}`}
-                        className="text-indigo-500"
-                    />
-                </svg>
+                <ProgressRing progress={progress} size={40} strokeWidth={3} />
             </div>
 
             <div className="flex-1 min-w-0">
@@ -1848,18 +1854,6 @@ function OrgTreeNodeRow({
 }
 
 // ── Helpers ────────────────────────────────────────────────
-
-function formatDate(dateStr: string): string {
-    try {
-        return new Date(dateStr).toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-        });
-    } catch {
-        return dateStr;
-    }
-}
 
 function isQuarterActive(startDate: string, endDate: string): boolean {
     const now = new Date();

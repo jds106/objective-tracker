@@ -1,9 +1,5 @@
 import { apiClient } from './api-client.js';
-import type { User, Objective, Cycle, UpdateUserInput } from '@objective-tracker/shared';
-
-interface ApiResponse<T> {
-    data: T;
-}
+import type { ApiResponse, User, Objective, Cycle, UpdateUserInput } from '@objective-tracker/shared';
 
 interface PasswordResetResult {
     message: string;
@@ -51,6 +47,26 @@ export function adminResetPassword(id: string) {
 
 export function adminSetPassword(id: string, password: string) {
     return apiClient.put<ApiResponse<{ message: string }>>(`/admin/users/${id}/password`, { password });
+}
+
+// ── CSV Import ───────────────────────────────────────
+
+export interface CsvImportRow {
+    email: string;
+    displayName: string;
+    jobTitle: string;
+    department?: string;
+    managerEmail?: string;
+    level?: number;
+}
+
+export interface CsvImportResult {
+    results: Array<{ email: string; status: 'created' | 'skipped' | 'error'; message?: string }>;
+    summary: { total: number; created: number; skipped: number; errors: number };
+}
+
+export function importUsersFromCsv(rows: CsvImportRow[]) {
+    return apiClient.post<ApiResponse<CsvImportResult>>('/admin/users/import', { rows });
 }
 
 // ── Objectives ───────────────────────────────────────
