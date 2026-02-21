@@ -20,6 +20,7 @@
     "react-router-dom": "^7.1.0"
   },
   "devDependencies": {
+    "@heroicons/react": "^2.2.0",
     "@types/d3-hierarchy": "^3.1.7",
     "@types/d3-selection": "^3.0.11",
     "@types/d3-transition": "^3.0.9",

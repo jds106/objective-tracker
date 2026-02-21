@@ -68,7 +68,7 @@ export function TreeNodeCard({ node, x, y, width, height, depth, childCount, isE
       initial={{ opacity: 0, scale: 0.92 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.92 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
+      transition={{ duration: 0.3, ease: 'easeOut', delay: depth * 0.12 }}
       style={{ transformOrigin: `${x}px ${y + height / 2}px` }}
     >
       <foreignObject x={x - width / 2} y={y} width={width} height={totalHeight}>

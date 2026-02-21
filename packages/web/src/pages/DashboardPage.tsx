@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ExclamationCircleIcon, CheckCircleIcon, QueueListIcon } from '@heroicons/react/24/outline';
 import type { CreateObjectiveBody, UpdateObjectiveBody } from '@objective-tracker/shared';
 import { calculateObjectiveProgress, calculateHealthStatus, type HealthStatus } from '@objective-tracker/shared';
 import { useAuth } from '../contexts/auth.context.js';
@@ -75,9 +76,7 @@ export function DashboardPage() {
       {!activeCycle && !isLoading && (
         <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
           <div className="flex items-start gap-3">
-            <svg className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
+            <ExclamationCircleIcon className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
             <div className="text-sm text-amber-300">
               <p className="font-medium">No active cycle</p>
               <p className="mt-1 text-amber-400/80">
@@ -103,9 +102,7 @@ export function DashboardPage() {
               to="/check-in"
               className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30 transition-colors"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <CheckCircleIcon className="h-4 w-4" />
               Check in on all
             </Link>
           )}
@@ -113,11 +110,7 @@ export function DashboardPage() {
 
         {objectives.length === 0 ? (
           <EmptyState
-            icon={
-              <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
-              </svg>
-            }
+            icon={<QueueListIcon className="h-12 w-12" />}
             title="No objectives yet"
             description="Create your first objective to start tracking your goals and key results."
             action={

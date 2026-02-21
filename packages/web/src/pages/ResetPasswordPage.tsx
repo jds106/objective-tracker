@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { CheckCircleIcon } from '@heroicons/react/24/outline';
 import { resetPassword } from '../services/auth.api.js';
 import { getErrorMessage } from '../utils/error.js';
 
@@ -45,9 +46,7 @@ export function ResetPasswordPage() {
                 <div className="w-full max-w-md space-y-6 bg-surface-raised rounded-xl p-8 border border-slate-700">
                     <div className="text-center">
                         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
-                            <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <CheckCircleIcon className="h-6 w-6 text-green-400" />
                         </div>
                         <h2 className="text-xl font-bold text-slate-100">Password reset</h2>
                         <p className="mt-2 text-sm text-slate-400">

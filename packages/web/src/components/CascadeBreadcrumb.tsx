@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ChevronRightIcon } from '@heroicons/react/24/outline';
 import type { Objective } from '@objective-tracker/shared';
 
 interface CascadeBreadcrumbProps {
@@ -14,9 +15,7 @@ export function CascadeBreadcrumb({ path, className = '' }: CascadeBreadcrumbPro
       {path.map((obj, i) => (
         <span key={obj.id} className="flex items-center gap-1">
           {i > 0 && (
-            <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-            </svg>
+            <ChevronRightIcon className="h-4 w-4 text-slate-500" />
           )}
           {i < path.length - 1 ? (
             <Link

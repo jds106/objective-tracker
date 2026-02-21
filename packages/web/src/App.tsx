@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/auth.context.js';
 import { CycleProvider } from './contexts/cycle.context.js';
+import { ReportsProvider } from './contexts/reports.context.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { Layout } from './components/Layout.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
@@ -47,7 +48,9 @@ export function App() {
                 <Route
                   element={
                     <CycleProvider>
-                      <Layout />
+                      <ReportsProvider>
+                        <Layout />
+                      </ReportsProvider>
                     </CycleProvider>
                   }
                 >

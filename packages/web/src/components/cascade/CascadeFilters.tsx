@@ -1,4 +1,5 @@
 import type { ObjectiveStatus, HealthStatus } from '@objective-tracker/shared';
+import { Select } from '../ui/Select.js';
 
 interface CascadeFiltersProps {
   search: string;
@@ -8,6 +9,22 @@ interface CascadeFiltersProps {
   healthFilter: HealthStatus | '';
   onHealthFilterChange: (value: HealthStatus | '') => void;
 }
+
+const statusOptions = [
+  { value: '', label: 'All statuses' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+const healthOptions = [
+  { value: '', label: 'All health' },
+  { value: 'on_track', label: 'On Track' },
+  { value: 'at_risk', label: 'At Risk' },
+  { value: 'behind', label: 'Behind' },
+  { value: 'not_started', label: 'Not Started' },
+];
 
 export function CascadeFilters({
   search,
@@ -25,34 +42,24 @@ export function CascadeFilters({
         onChange={e => onSearchChange(e.target.value)}
         placeholder="Search objectives…"
         aria-label="Search objectives"
-        className="rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none w-full sm:w-64"
+        className="rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:shadow-sm focus:shadow-indigo-500/20 w-full sm:w-64"
       />
 
-      <select
+      <Select
         value={statusFilter}
-        onChange={e => onStatusFilterChange(e.target.value as ObjectiveStatus | '')}
+        onChange={v => onStatusFilterChange(v as ObjectiveStatus | '')}
+        options={statusOptions}
         aria-label="Filter by status"
-        className="rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
-      >
-        <option value="">All statuses</option>
-        <option value="draft">Draft</option>
-        <option value="active">Active</option>
-        <option value="completed">Completed</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
+        className="w-40"
+      />
 
-      <select
+      <Select
         value={healthFilter}
-        onChange={e => onHealthFilterChange(e.target.value as HealthStatus | '')}
+        onChange={v => onHealthFilterChange(v as HealthStatus | '')}
+        options={healthOptions}
         aria-label="Filter by health"
-        className="rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
-      >
-        <option value="">All health</option>
-        <option value="on_track">On Track</option>
-        <option value="at_risk">At Risk</option>
-        <option value="behind">Behind</option>
-        <option value="not_started">Not Started</option>
-      </select>
+        className="w-40"
+      />
     </div>
   );
 }

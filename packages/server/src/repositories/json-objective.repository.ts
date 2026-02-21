@@ -16,12 +16,14 @@ interface ObjectivesIndex {
 
 export class JsonObjectiveRepository implements ObjectiveRepository {
   private readonly indexPath: string;
+  private readonly krIndexPath: string;
 
   constructor(
     private readonly dataDir: string,
     private readonly userRepo: JsonUserRepository,
   ) {
     this.indexPath = join(dataDir, 'objectives-index.json');
+    this.krIndexPath = join(dataDir, 'key-results-index.json');
   }
 
   async init(): Promise<void> {
@@ -145,6 +147,10 @@ export class JsonObjectiveRepository implements ObjectiveRepository {
     const file = await this.userRepo.readUserFile(userId);
     if (!file) throw new NotFoundError('User not found');
 
+    // BUG-070: Collect key result IDs before deleting so we can clean KR index
+    const objective = file.objectives.find(o => o.id === id);
+    const krIds = objective ? objective.keyResults.map(kr => kr.id) : [];
+
     const updatedFile: UserFile = {
       ...file,
       version: file.version + 1,
@@ -153,6 +159,11 @@ export class JsonObjectiveRepository implements ObjectiveRepository {
 
     await this.userRepo.writeUserFile(userId, updatedFile, file.version);
     await this.removeFromIndex(id);
+
+    // Clean up orphaned key result index entries
+    if (krIds.length > 0) {
+      await this.removeKeyResultsFromIndex(krIds);
+    }
   }
 
   async lookupOwner(objectiveId: string): Promise<string | null> {
@@ -178,6 +189,18 @@ export class JsonObjectiveRepository implements ObjectiveRepository {
       const index = await this.readIndex();
       delete index[objectiveId];
       await writeJsonFile(this.indexPath, index);
+    });
+  }
+
+  /** BUG-070: Remove key result entries from key-results-index when their parent objective is deleted */
+  private async removeKeyResultsFromIndex(krIds: string[]): Promise<void> {
+    return withWriteLock(this.krIndexPath, async () => {
+      const raw = await readJsonFile<Record<string, unknown>>(this.krIndexPath);
+      if (!raw) return;
+      for (const krId of krIds) {
+        delete raw[krId];
+      }
+      await writeJsonFile(this.krIndexPath, raw);
     });
   }
 }

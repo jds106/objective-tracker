@@ -1,4 +1,5 @@
 import type { PercentageConfig as PercentageConfigType } from '@objective-tracker/shared';
+import { RangeSlider } from '../ui/RangeSlider.js';
 
 interface PercentageConfigProps {
   config: PercentageConfigType;
@@ -11,16 +12,16 @@ export function PercentageConfig({ config, onChange }: PercentageConfigProps) {
       <label htmlFor="pct-value" className="block text-sm font-medium text-slate-300">
         Current Value ({config.currentValue}%)
       </label>
-      <input
+      <RangeSlider
         id="pct-value"
-        type="range"
+        value={config.currentValue}
+        onChange={v => onChange({ ...config, currentValue: v })}
         min={0}
         max={100}
-        value={config.currentValue}
-        onChange={e => onChange({ ...config, currentValue: Number(e.target.value) })}
-        className="mt-2 w-full accent-indigo-500"
+        aria-label="Percentage value"
+        className="mt-3"
       />
-      <div className="flex justify-between text-xs text-slate-500 mt-1">
+      <div className="flex justify-between text-xs text-slate-500 mt-2">
         <span>0%</span>
         <span>100%</span>
       </div>

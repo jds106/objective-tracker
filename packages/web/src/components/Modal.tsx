@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 interface ModalProps {
   isOpen: boolean;
@@ -111,9 +112,7 @@ export function Modal({
                 className="text-slate-400 hover:text-slate-200 transition-colors"
                 aria-label="Close"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XMarkIcon className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
             <div className="px-6 py-4 max-h-[80vh] overflow-y-auto">

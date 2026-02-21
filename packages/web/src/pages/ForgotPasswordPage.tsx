@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { EnvelopeIcon } from '@heroicons/react/24/outline';
 import { forgotPassword } from '../services/auth.api.js';
 import { getErrorMessage } from '../utils/error.js';
 
@@ -33,9 +34,7 @@ export function ForgotPasswordPage() {
                 <div className="w-full max-w-md space-y-6 bg-surface-raised rounded-xl p-8 border border-slate-700">
                     <div className="text-center">
                         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
-                            <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                            </svg>
+                            <EnvelopeIcon className="h-6 w-6 text-green-400" />
                         </div>
                         <h2 className="text-xl font-bold text-slate-100">Check your email</h2>
                         <p className="mt-2 text-sm text-slate-400">

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import type { CycleRepository, Cycle } from '@objective-tracker/shared';
-import { generateId } from '@objective-tracker/shared';
+import type { CycleRepository, Cycle, UpdateCycleInput } from '@objective-tracker/shared';
+import { generateId, NotFoundError } from '@objective-tracker/shared';
 import { readJsonFile, writeJsonFile, withWriteLock } from './file-helpers.js';
 
 interface CyclesFile {
@@ -57,6 +57,33 @@ export class JsonCycleRepository implements CycleRepository {
 
       await writeJsonFile(this.filePath, updatedFile);
       return newCycle;
+    });
+  }
+
+  async update(id: string, updates: UpdateCycleInput): Promise<Cycle> {
+    return withWriteLock(this.filePath, async () => {
+      const file = await this.readFile();
+      const index = file.cycles.findIndex(c => c.id === id);
+      if (index === -1) throw new NotFoundError('Cycle not found');
+
+      const existing = file.cycles[index];
+      const updated: Cycle = {
+        ...existing,
+        ...updates,
+        id: existing.id, // Preserve id
+        quarters: updates.quarters
+          ? updates.quarters.map(q => ({ ...q, id: q.id ?? generateId() }))
+          : existing.quarters,
+      };
+
+      file.cycles[index] = updated;
+      const updatedFile: CyclesFile = {
+        version: file.version + 1,
+        cycles: file.cycles,
+      };
+
+      await writeJsonFile(this.filePath, updatedFile);
+      return updated;
     });
   }
 

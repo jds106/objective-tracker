@@ -82,3 +82,21 @@ export interface CreateCycleInput {
 export function createCycle(input: CreateCycleInput) {
     return apiClient.post<ApiResponse<Cycle>>('/admin/cycles', input);
 }
+
+export interface UpdateCycleApiInput {
+    name?: string;
+    startDate?: string;
+    endDate?: string;
+    status?: 'planning' | 'active' | 'review' | 'closed';
+    quarters?: Array<{
+        id?: string;
+        name: string;
+        startDate: string;
+        endDate: string;
+        reviewDeadline: string;
+    }>;
+}
+
+export function updateCycle(id: string, updates: UpdateCycleApiInput) {
+    return apiClient.put<ApiResponse<Cycle>>(`/admin/cycles/${id}`, updates);
+}

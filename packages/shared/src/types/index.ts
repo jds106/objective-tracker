@@ -25,6 +25,7 @@ export type {
   UpdateKeyResultInput,
   KeyResultRepository,
   CycleRepository,
+  UpdateCycleInput,
 } from './repository.js';
 export {
   AppError,

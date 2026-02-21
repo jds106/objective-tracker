@@ -22,3 +22,13 @@ export const createCycleSchema = z.object({
 );
 
 export type CreateCycleBody = z.infer<typeof createCycleSchema>;
+
+export const updateCycleSchema = z.object({
+  name: z.string().min(1).max(50).optional(),
+  startDate: z.string().date().optional(),
+  endDate: z.string().date().optional(),
+  status: z.enum(['planning', 'active', 'review', 'closed']).optional(),
+  quarters: z.array(quarterSchema).min(1).optional(),
+});
+
+export type UpdateCycleBody = z.infer<typeof updateCycleSchema>;

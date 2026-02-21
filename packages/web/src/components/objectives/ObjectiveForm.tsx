@@ -56,7 +56,6 @@ export function ObjectiveForm({
           id="obj-description"
           value={description}
           onChange={e => setDescription(e.target.value)}
-          required
           rows={3}
           className="mt-1 block w-full rounded-lg bg-surface border border-slate-600 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           placeholder="Describe what this objective aims to achieve and why it matters..."
@@ -75,7 +74,7 @@ export function ObjectiveForm({
       <div className="flex justify-end gap-3 pt-2">
         <button
           type="submit"
-          disabled={isSubmitting || !title.trim() || !description.trim()}
+          disabled={isSubmitting || !title.trim()}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSubmitting ? 'Saving...' : submitLabel}

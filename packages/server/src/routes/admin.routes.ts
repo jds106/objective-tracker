@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomBytes } from 'node:crypto';
-import { updateUserAdminSchema, companyObjectiveSchema, adminCreateUserSchema, createCycleSchema, NotFoundError } from '@objective-tracker/shared';
+import { updateUserAdminSchema, companyObjectiveSchema, adminCreateUserSchema, createCycleSchema, updateCycleSchema, NotFoundError } from '@objective-tracker/shared';
 import { validate } from '../middleware/validate.middleware.js';
 import { createAuthMiddleware } from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/require-admin.middleware.js';
@@ -152,6 +152,25 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
             logger.info({ adminId: req.user!.id, cycleId: cycle.id }, 'Admin created cycle');
             res.status(201).json({ data: cycle });
         } catch (err) {
+            next(err);
+        }
+    });
+
+    /** Update an existing cycle */
+    router.put('/cycles/:id', validate(updateCycleSchema), async (req, res, next) => {
+        try {
+            const cycle = await deps.cycleService.update(req.params.id, req.body);
+            logger.info({ adminId: req.user!.id, cycleId: cycle.id, changes: Object.keys(req.body) }, 'Admin updated cycle');
+            res.json({ data: cycle });
+        } catch (err) {
+            if (err instanceof Error && err.message.includes('Invalid status transition')) {
+                res.status(400).json({ error: err.message });
+                return;
+            }
+            if (err instanceof Error && err.message.includes('Cannot activate')) {
+                res.status(409).json({ error: err.message });
+                return;
+            }
             next(err);
         }
     });

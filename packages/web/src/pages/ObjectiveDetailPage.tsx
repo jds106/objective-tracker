@@ -194,15 +194,13 @@ export function ObjectiveDetailPage() {
 
       {/* ── Modals ─────────────────────────────────────────── */}
 
-      {activeCycle && (
-        <ObjectiveFormModal
-          isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          onSubmit={handleEditObjective}
-          objective={objective}
-          cycleId={activeCycle.id}
-        />
-      )}
+      <ObjectiveFormModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSubmit={handleEditObjective}
+        objective={objective}
+        cycleId={activeCycle?.id ?? objective.cycleId}
+      />
 
       <KeyResultFormModal
         isOpen={showAddKR}

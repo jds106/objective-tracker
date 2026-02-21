@@ -2,7 +2,7 @@ import type { User, UserWithPassword, UserRole } from './user.js';
 import type { Objective, ObjectiveStatus } from './objective.js';
 import type { KeyResult, KeyResultType, KeyResultConfig } from './key-result.js';
 import type { CheckIn } from './check-in.js';
-import type { Cycle } from './cycle.js';
+import type { Cycle, CycleStatus, Quarter } from './cycle.js';
 
 export interface CreateUserInput {
   email: string;
@@ -58,6 +58,8 @@ export interface UpdateObjectiveInput {
 export interface ObjectiveRepository {
   getByUserId(userId: string, cycleId?: string): Promise<Objective[]>;
   getById(id: string): Promise<Objective | null>;
+  /** Returns all objectives across all users. Used by admin endpoints. */
+  getAll?(cycleId?: string): Promise<Objective[]>;
   create(input: CreateObjectiveInput): Promise<Objective>;
   update(id: string, updates: UpdateObjectiveInput): Promise<Objective>;
   delete(id: string): Promise<void>;
@@ -83,9 +85,18 @@ export interface KeyResultRepository {
   addCheckIn(keyResultId: string, checkIn: Omit<CheckIn, 'id'>): Promise<CheckIn>;
 }
 
+export interface UpdateCycleInput {
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: CycleStatus;
+  quarters?: Quarter[];
+}
+
 export interface CycleRepository {
   getAll(): Promise<Cycle[]>;
   getActive(): Promise<Cycle | null>;
   getById(id: string): Promise<Cycle | null>;
   create(cycle: Omit<Cycle, 'id'>): Promise<Cycle>;
+  update(id: string, updates: UpdateCycleInput): Promise<Cycle>;
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 import type { MilestoneConfig as MilestoneConfigType, MilestoneItem } from '@objective-tracker/shared';
 import { generateId } from '@objective-tracker/shared';
 
@@ -67,9 +68,7 @@ export function MilestoneConfig({ config, onChange, checkInMode }: MilestoneConf
                   className="text-slate-500 hover:text-red-400 transition-colors"
                   aria-label={`Remove ${m.title}`}
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <XMarkIcon className="h-4 w-4" />
                 </button>
               )}
             </li>

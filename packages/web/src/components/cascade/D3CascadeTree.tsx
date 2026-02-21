@@ -34,6 +34,53 @@ interface FlatLink {
   sourceY: number;
   targetX: number;
   targetY: number;
+  targetDepth: number;
+}
+
+/** Compute a d3 ZoomTransform that fits all visible nodes within the container */
+function computeFitTransform(
+  flatNodes: FlatNode[],
+  width: number,
+  height: number,
+  nodeWidth: number,
+  nodeHeight: number,
+  padding = 60,
+) {
+  if (flatNodes.length === 0 || width <= 0 || height <= 0) {
+    return zoomIdentity.translate(width / 2, 50);
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (const node of flatNodes) {
+    const left = node.x - nodeWidth / 2;
+    const right = node.x + nodeWidth / 2;
+    const top = node.y;
+    const bottom = node.y + nodeHeight;
+    if (left < minX) minX = left;
+    if (right > maxX) maxX = right;
+    if (top < minY) minY = top;
+    if (bottom > maxY) maxY = bottom;
+  }
+
+  const treeWidth = maxX - minX;
+  const treeHeight = maxY - minY;
+  const availableWidth = width - padding * 2;
+  const availableHeight = height - padding * 2;
+
+  const scaleX = treeWidth > 0 ? availableWidth / treeWidth : 1;
+  const scaleY = treeHeight > 0 ? availableHeight / treeHeight : 1;
+  const k = Math.min(scaleX, scaleY, 1); // Never zoom past 1:1
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  return zoomIdentity
+    .translate(width / 2 - centerX * k, height / 2 - centerY * k)
+    .scale(k);
 }
 
 /** Collect IDs at the first two levels (depth 0 and 1) of the cascade tree */
@@ -150,6 +197,7 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
         sourceY: link.source.y! - (NODE_HEIGHT + V_GAP),
         targetX: link.target.x!,
         targetY: link.target.y! - (NODE_HEIGHT + V_GAP),
+        targetDepth: link.target.depth - 1, // Subtract 1 for virtual root
       });
     });
 
@@ -194,17 +242,19 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
     };
   }, []);
 
-  // Set initial transform once when container size is first known
+  // Set initial transform once — fit all visible nodes within the viewport
   useEffect(() => {
     if (zoomInitialisedRef.current) return;
     const svg = svgRef.current;
     const zoomBehavior = zoomRef.current;
-    if (!svg || !zoomBehavior || containerSize.width <= 0) return;
+    if (!svg || !zoomBehavior || containerSize.width <= 0 || flatNodes.length === 0) return;
 
-    const initialTransform = zoomIdentity.translate(containerSize.width / 2, 50);
-    select(svg).call(zoomBehavior.transform, initialTransform);
+    const fitTransform = computeFitTransform(
+      flatNodes, containerSize.width, containerSize.height, NODE_WIDTH, NODE_HEIGHT,
+    );
+    select(svg).call(zoomBehavior.transform, fitTransform);
     zoomInitialisedRef.current = true;
-  }, [containerSize.width]);
+  }, [containerSize.width, containerSize.height, flatNodes]);
 
   const handleZoomIn = useCallback(() => {
     const svg = svgRef.current;
@@ -224,9 +274,11 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
     const svg = svgRef.current;
     const zoomBehavior = zoomRef.current;
     if (!svg || !zoomBehavior) return;
-    const resetTransform = zoomIdentity.translate(containerSize.width / 2, 50);
-    select(svg).transition().duration(500).call(zoomBehavior.transform, resetTransform);
-  }, [containerSize.width]);
+    const fitTransform = computeFitTransform(
+      flatNodes, containerSize.width, containerSize.height, NODE_WIDTH, NODE_HEIGHT,
+    );
+    select(svg).transition().duration(500).call(zoomBehavior.transform, fitTransform);
+  }, [flatNodes, containerSize.width, containerSize.height]);
 
   if (nodes.length === 0) {
     return (
@@ -262,6 +314,7 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
                 targetX={link.targetX}
                 targetY={link.targetY}
                 nodeHeight={NODE_HEIGHT}
+                depth={link.targetDepth}
               />
             ))}
           </AnimatePresence>

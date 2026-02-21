@@ -33,10 +33,14 @@ interface OrgIndexEntry {
 export class JsonUserRepository implements UserRepository {
   private readonly usersDir: string;
   private readonly orgPath: string;
+  private readonly objectivesIndexPath: string;
+  private readonly keyResultsIndexPath: string;
 
   constructor(private readonly dataDir: string) {
     this.usersDir = join(dataDir, 'users');
     this.orgPath = join(dataDir, 'org.json');
+    this.objectivesIndexPath = join(dataDir, 'objectives-index.json');
+    this.keyResultsIndexPath = join(dataDir, 'key-results-index.json');
   }
 
   async init(): Promise<void> {
@@ -191,6 +195,10 @@ export class JsonUserRepository implements UserRepository {
     const file = await this.readUserFile(id);
     if (!file) throw new NotFoundError('User not found');
 
+    // BUG-071: Collect objective and key result IDs before deletion for index cleanup
+    const objectiveIds = file.objectives.map(o => o.id);
+    const keyResultIds = file.objectives.flatMap(o => o.keyResults.map(kr => kr.id));
+
     // Remove user file
     await unlink(this.userFilePath(id));
 
@@ -200,6 +208,30 @@ export class JsonUserRepository implements UserRepository {
       org.users = org.users.filter(u => u.id !== id);
       await writeJsonFile(this.orgPath, org);
     });
+
+    // BUG-071: Clean up objectives index
+    if (objectiveIds.length > 0) {
+      await withWriteLock(this.objectivesIndexPath, async () => {
+        const raw = await readJsonFile<Record<string, string>>(this.objectivesIndexPath);
+        if (!raw) return;
+        for (const objId of objectiveIds) {
+          delete raw[objId];
+        }
+        await writeJsonFile(this.objectivesIndexPath, raw);
+      });
+    }
+
+    // BUG-071: Clean up key results index
+    if (keyResultIds.length > 0) {
+      await withWriteLock(this.keyResultsIndexPath, async () => {
+        const raw = await readJsonFile<Record<string, unknown>>(this.keyResultsIndexPath);
+        if (!raw) return;
+        for (const krId of keyResultIds) {
+          delete raw[krId];
+        }
+        await writeJsonFile(this.keyResultsIndexPath, raw);
+      });
+    }
   }
 
   // Internal helpers used by objective and key result repos

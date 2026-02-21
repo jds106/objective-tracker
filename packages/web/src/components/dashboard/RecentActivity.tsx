@@ -1,3 +1,4 @@
+import { ClockIcon } from '@heroicons/react/24/outline';
 import type { Objective, CheckIn } from '@objective-tracker/shared';
 import { EmptyState } from '../EmptyState.js';
 
@@ -53,11 +54,7 @@ export function RecentActivity({ objectives }: RecentActivityProps) {
   if (recent.length === 0) {
     return (
       <EmptyState
-        icon={
-          <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-          </svg>
-        }
+        icon={<ClockIcon className="h-8 w-8" />}
         title="No recent activity"
         description="Your check-in history will appear here once you start recording progress."
         className="py-6"

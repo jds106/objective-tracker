@@ -664,8 +664,9 @@ objective-tracker/
 - `DELETE /api/admin/users/:id` — Delete user (cannot self-delete)
 - `POST /api/admin/users/:id/reset-password` — Generate temporary password for user
 - `PUT /api/admin/users/:id/password` — Set a specific password for a user
-- `GET /api/admin/objectives` — List all objectives org-wide
+- `GET /api/admin/objectives` — List all objectives org-wide (resolves owner names when user list is available)
 - `POST /api/admin/objectives/company` — Create a root-level company objective
+- `POST /api/admin/cycles` — Create a new objective cycle (with quarters)
 - `POST /api/admin/import/workday` — Upload and process Workday CSV
 - `GET /api/admin/org` — Full org tree
 

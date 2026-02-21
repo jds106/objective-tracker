@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { User, Objective, Cycle, CycleStatus } from '@objective-tracker/shared';
+import type { User, Objective, Cycle, CycleStatus, UpdateObjectiveBody } from '@objective-tracker/shared';
 import { useCycle } from '../contexts/cycle.context.js';
 import { Modal } from '../components/Modal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
@@ -7,6 +7,7 @@ import { PageTransition } from '../components/PageTransition.js';
 import { useDebounce } from '../hooks/useDebounce.js';
 import { getErrorMessage } from '../utils/error.js';
 import * as adminApi from '../services/admin.api.js';
+import * as objectivesApi from '../services/objectives.api.js';
 
 type Tab = 'users' | 'objectives' | 'cycles';
 
@@ -57,6 +58,8 @@ function UsersTab() {
     const [setPasswordUser, setSetPasswordUser] = useState<User | null>(null);
     const [editUser, setEditUser] = useState<User | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const PAGE_SIZE = 25;
 
     const fetchUsers = useCallback(async () => {
         try {
@@ -126,6 +129,13 @@ function UsersTab() {
             (u.department ?? '').toLowerCase().includes(term);
     });
 
+    // Reset to page 1 when search changes
+    useEffect(() => { setCurrentPage(1); }, [debouncedSearch]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const safePage = Math.min(currentPage, totalPages);
+    const paginatedUsers = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
     // Build a manager lookup for display
     const userMap = useMemo(() => {
         const map = new Map<string, User>();
@@ -175,7 +185,7 @@ function UsersTab() {
                         </tr>
                     </thead>
                     <tbody>
-                        {filtered.map(user => {
+                        {paginatedUsers.map(user => {
                             const manager = user.managerId ? userMap.get(user.managerId) : null;
                             return (
                                 <tr key={user.id} className="border-b border-slate-700/50 hover:bg-slate-800/40 transition-colors">
@@ -255,7 +265,44 @@ function UsersTab() {
                 </table>
             </div>
 
-            <p className="mt-3 text-xs text-slate-500">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
+            {/* Pagination controls */}
+            <div className="mt-3 flex items-center justify-between">
+                <p className="text-xs text-slate-500">
+                    {filtered.length === users.length
+                        ? `${users.length} user${users.length !== 1 ? 's' : ''} total`
+                        : `${filtered.length} of ${users.length} users`}
+                </p>
+                {totalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={safePage <= 1}
+                            className="rounded-md px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                        >
+                            ← Prev
+                        </button>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                            <button
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${page === safePage
+                                        ? 'bg-indigo-600/30 text-indigo-300'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                                    }`}
+                            >
+                                {page}
+                            </button>
+                        ))}
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={safePage >= totalPages}
+                            className="rounded-md px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                        >
+                            Next →
+                        </button>
+                    </div>
+                )}
+            </div>
 
             {/* Temp password modal */}
             <Modal
@@ -461,16 +508,29 @@ function CreateUserModal({ isOpen, users, onClose, onCreated }: {
                         </select>
                     </div>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Department</label>
-                    <input
-                        type="text"
-                        value={department}
-                        onChange={e => setDepartment(e.target.value)}
-                        maxLength={100}
-                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
-                        placeholder="Engineering"
-                    />
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Department</label>
+                        <input
+                            type="text"
+                            value={department}
+                            onChange={e => setDepartment(e.target.value)}
+                            maxLength={100}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            placeholder="Engineering"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Role</label>
+                        <select
+                            value={role}
+                            onChange={e => setRole(e.target.value as 'admin' | 'standard')}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        >
+                            <option value="standard">Standard</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
@@ -498,7 +558,7 @@ function CreateUserModal({ isOpen, users, onClose, onCreated }: {
                         disabled={creating}
                         className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
                     >
-                        {creating ? 'Creating...' : 'Create User'}
+                        {creating ? 'Creating…' : 'Create User'}
                     </button>
                 </div>
             </form>
@@ -520,6 +580,7 @@ function EditUserModal({ isOpen, user, users, onClose, onUpdated }: {
     const [department, setDepartment] = useState('');
     const [managerId, setManagerId] = useState('');
     const [level, setLevel] = useState(5);
+    const [role, setRole] = useState<'admin' | 'standard'>('standard');
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -531,6 +592,7 @@ function EditUserModal({ isOpen, user, users, onClose, onUpdated }: {
             setDepartment(user.department ?? '');
             setManagerId(user.managerId ?? '');
             setLevel(user.level);
+            setRole(user.role);
             setError('');
         }
     }, [user]);
@@ -565,6 +627,7 @@ function EditUserModal({ isOpen, user, users, onClose, onUpdated }: {
                 department: department || undefined,
                 managerId: managerId || null,
                 level,
+                role,
             });
             onUpdated(data);
         } catch (err) {
@@ -631,16 +694,29 @@ function EditUserModal({ isOpen, user, users, onClose, onUpdated }: {
                         </select>
                     </div>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Department</label>
-                    <input
-                        type="text"
-                        value={department}
-                        onChange={e => setDepartment(e.target.value)}
-                        maxLength={100}
-                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
-                        placeholder="Engineering"
-                    />
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Department</label>
+                        <input
+                            type="text"
+                            value={department}
+                            onChange={e => setDepartment(e.target.value)}
+                            maxLength={100}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            placeholder="Engineering"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Role</label>
+                        <select
+                            value={role}
+                            onChange={e => setRole(e.target.value as 'admin' | 'standard')}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        >
+                            <option value="standard">Standard</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-2">
                     <button
@@ -655,7 +731,7 @@ function EditUserModal({ isOpen, user, users, onClose, onUpdated }: {
                         disabled={saving}
                         className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
                     >
-                        {saving ? 'Saving...' : 'Save Changes'}
+                        {saving ? 'Saving…' : 'Save Changes'}
                     </button>
                 </div>
             </form>
@@ -766,6 +842,8 @@ function ObjectivesTab() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [creating, setCreating] = useState(false);
+    const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
+    const [deleteObjectiveConfirm, setDeleteObjectiveConfirm] = useState<Objective | null>(null);
 
     const fetchData = useCallback(async () => {
         try {
@@ -812,6 +890,21 @@ function ObjectivesTab() {
         }
     };
 
+    const handleObjectiveUpdated = (updated: Objective) => {
+        setObjectives(prev => prev.map(o => o.id === updated.id ? updated : o));
+        setEditingObjective(null);
+    };
+
+    const handleDeleteObjective = async (objective: Objective) => {
+        try {
+            await objectivesApi.deleteObjective(objective.id);
+            setObjectives(prev => prev.filter(o => o.id !== objective.id));
+            setDeleteObjectiveConfirm(null);
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to delete objective'));
+        }
+    };
+
     const companyObjectives = objectives.filter(o => o.ownerId === 'company');
     const userObjectives = objectives.filter(o => o.ownerId !== 'company');
 
@@ -847,7 +940,14 @@ function ObjectivesTab() {
                 ) : (
                     <div className="grid gap-3">
                         {companyObjectives.map(obj => (
-                            <ObjectiveRow key={obj.id} objective={obj} isCompany />
+                            <ObjectiveRow
+                                key={obj.id}
+                                objective={obj}
+                                isCompany
+                                userMap={userMap}
+                                onEdit={() => setEditingObjective(obj)}
+                                onDelete={() => setDeleteObjectiveConfirm(obj)}
+                            />
                         ))}
                     </div>
                 )}
@@ -867,7 +967,13 @@ function ObjectivesTab() {
                 ) : (
                     <div className="grid gap-3">
                         {userObjectives.map(obj => (
-                            <ObjectiveRow key={obj.id} objective={obj} userMap={userMap} />
+                            <ObjectiveRow
+                                key={obj.id}
+                                objective={obj}
+                                userMap={userMap}
+                                onEdit={() => setEditingObjective(obj)}
+                                onDelete={() => setDeleteObjectiveConfirm(obj)}
+                            />
                         ))}
                     </div>
                 )}
@@ -912,21 +1018,150 @@ function ObjectivesTab() {
                             disabled={creating || !title.trim()}
                             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
                         >
-                            {creating ? 'Creating...' : 'Create Objective'}
+                            {creating ? 'Creating…' : 'Create Objective'}
                         </button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* Edit objective modal */}
+            <EditObjectiveModal
+                isOpen={!!editingObjective}
+                objective={editingObjective}
+                onClose={() => setEditingObjective(null)}
+                onUpdated={handleObjectiveUpdated}
+            />
+
+            {/* Delete objective confirmation modal */}
+            <Modal
+                isOpen={!!deleteObjectiveConfirm}
+                onClose={() => setDeleteObjectiveConfirm(null)}
+                title="Delete Objective"
+            >
+                <p className="text-sm text-slate-300 mb-2">
+                    Are you sure you want to delete this objective?
+                </p>
+                {deleteObjectiveConfirm && (
+                    <p className="text-sm font-medium text-slate-200 mb-4 break-words">
+                        &ldquo;{deleteObjectiveConfirm.title}&rdquo;
+                    </p>
+                )}
+                <p className="text-xs text-slate-500 mb-4">This action cannot be undone.</p>
+                <div className="flex justify-end gap-3">
+                    <button
+                        onClick={() => setDeleteObjectiveConfirm(null)}
+                        className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={() => deleteObjectiveConfirm && handleDeleteObjective(deleteObjectiveConfirm)}
+                        className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors"
+                    >
+                        Delete Objective
+                    </button>
+                </div>
             </Modal>
         </div>
     );
 }
 
+// ── Edit Objective Modal ──────────────────────────────────
+
+function EditObjectiveModal({ isOpen, objective, onClose, onUpdated }: {
+    isOpen: boolean;
+    objective: Objective | null;
+    onClose: () => void;
+    onUpdated: (objective: Objective) => void;
+}) {
+    const [editTitle, setEditTitle] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [error, setError] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (objective) {
+            setEditTitle(objective.title);
+            setEditDescription(objective.description);
+            setError('');
+        }
+    }, [objective]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!objective) return;
+        setError('');
+        setSaving(true);
+        try {
+            const updates: UpdateObjectiveBody = {
+                title: editTitle,
+                description: editDescription,
+            };
+            const { data } = await objectivesApi.updateObjective(objective.id, updates);
+            onUpdated(data);
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to update objective'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Edit Objective">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">{error}</div>
+                )}
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Title</label>
+                    <input
+                        type="text"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        required
+                        maxLength={200}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                    <textarea
+                        value={editDescription}
+                        onChange={e => setEditDescription(e.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none resize-none"
+                    />
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={saving || !editTitle.trim()}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                    >
+                        {saving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    );
+}
+
 // ── Shared Components ──────────────────────────────────────
 
-function ObjectiveRow({ objective, isCompany, userMap }: {
+function ObjectiveRow({ objective, isCompany, userMap, onEdit, onDelete }: {
     objective: Objective;
     isCompany?: boolean;
     userMap?: Map<string, User>;
+    onEdit: () => void;
+    onDelete: () => void;
 }) {
     const progress = objective.keyResults.length > 0
         ? Math.round(objective.keyResults.reduce((sum, kr) => sum + kr.progress, 0) / objective.keyResults.length)
@@ -974,6 +1209,24 @@ function ObjectiveRow({ objective, isCompany, userMap }: {
                         <span className="ml-1">· Owner: {ownerName}</span>
                     )}
                 </p>
+            </div>
+
+            {/* Actions */}
+            <div className="shrink-0 flex items-center gap-2">
+                <button
+                    onClick={onEdit}
+                    className="rounded px-2 py-1 text-xs text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                    title="Edit objective"
+                >
+                    Edit
+                </button>
+                <button
+                    onClick={onDelete}
+                    className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                    title="Delete objective"
+                >
+                    Delete
+                </button>
             </div>
         </div>
     );
