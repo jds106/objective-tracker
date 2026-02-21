@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import * as d3 from 'd3';
+import { select } from 'd3-selection';
+import 'd3-transition'; // Side-effect import — augments d3-selection with .transition()
+import { zoom, zoomIdentity, type ZoomBehavior, type D3ZoomEvent } from 'd3-zoom';
+import {
+  forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceY,
+  type Simulation, type SimulationNodeDatum, type SimulationLinkDatum,
+} from 'd3-force';
+import { drag, type D3DragEvent } from 'd3-drag';
 import { useNavigate } from 'react-router-dom';
 import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
 import type { Cycle } from '@objective-tracker/shared';
@@ -11,7 +18,7 @@ interface D3NetworkGraphProps {
   activeCycle?: Cycle | null;
 }
 
-interface GraphNode extends d3.SimulationNodeDatum {
+interface GraphNode extends SimulationNodeDatum {
   id: string;
   title: string;
   ownerName: string;
@@ -23,7 +30,7 @@ interface GraphNode extends d3.SimulationNodeDatum {
   isCompany: boolean;
 }
 
-interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
+interface GraphLink extends SimulationLinkDatum<GraphNode> {
   sourceId: string;
   targetId: string;
 }
@@ -93,8 +100,8 @@ const DEPTH_RADIUS: Record<number, number> = {
 export function D3NetworkGraph({ nodes: tree, activeCycle }: D3NetworkGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
+  const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const simulationRef = useRef<Simulation<GraphNode, GraphLink> | null>(null);
   const navigate = useNavigate();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
@@ -136,17 +143,17 @@ export function D3NetworkGraph({ nodes: tree, activeCycle }: D3NetworkGraphProps
     const g = gRef.current;
     if (!svg || !g) return;
 
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
+    const zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 3])
-      .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
-        d3.select(g).attr('transform', event.transform.toString());
+      .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
+        select(g).attr('transform', event.transform.toString());
       });
 
-    d3.select(svg).call(zoom);
-    zoomRef.current = zoom;
+    select(svg).call(zoomBehavior);
+    zoomRef.current = zoomBehavior;
 
     return () => {
-      d3.select(svg).on('.zoom', null);
+      select(svg).on('.zoom', null);
     };
   }, []);
 
@@ -158,18 +165,18 @@ export function D3NetworkGraph({ nodes: tree, activeCycle }: D3NetworkGraphProps
     const nodesCopy = graphNodes.map(n => ({ ...n }));
     const linksCopy = graphLinks.map(l => ({ ...l }));
 
-    const simulation = d3.forceSimulation<GraphNode>(nodesCopy)
-      .force('link', d3.forceLink<GraphNode, GraphLink>(linksCopy)
+    const simulation = forceSimulation<GraphNode>(nodesCopy)
+      .force('link', forceLink<GraphNode, GraphLink>(linksCopy)
         .id(d => d.id)
         .distance(120))
-      .force('charge', d3.forceManyBody().strength(-400))
-      .force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2))
-      .force('collision', d3.forceCollide<GraphNode>().radius(d => (DEPTH_RADIUS[d.depth] ?? 16) + 20))
-      .force('y', d3.forceY<GraphNode>().y(d => d.depth * 140 + 80).strength(0.3));
+      .force('charge', forceManyBody().strength(-400))
+      .force('center', forceCenter(dimensions.width / 2, dimensions.height / 2))
+      .force('collision', forceCollide<GraphNode>().radius(d => (DEPTH_RADIUS[d.depth] ?? 16) + 20))
+      .force('y', forceY<GraphNode>().y(d => d.depth * 140 + 80).strength(0.3));
 
     simulationRef.current = simulation;
 
-    const g = d3.select(gRef.current);
+    const g = select(gRef.current);
 
     // Clear existing elements
     g.selectAll('.link').remove();
@@ -190,17 +197,17 @@ export function D3NetworkGraph({ nodes: tree, activeCycle }: D3NetworkGraphProps
       .join('g')
       .attr('class', 'node')
       .attr('cursor', 'pointer')
-      .call(d3.drag<SVGGElement, GraphNode>()
-        .on('start', (event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>) => {
+      .call(drag<SVGGElement, GraphNode>()
+        .on('start', (event: D3DragEvent<SVGGElement, GraphNode, GraphNode>) => {
           if (!event.active) simulation.alphaTarget(0.3).restart();
           event.subject.fx = event.subject.x;
           event.subject.fy = event.subject.y;
         })
-        .on('drag', (event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>) => {
+        .on('drag', (event: D3DragEvent<SVGGElement, GraphNode, GraphNode>) => {
           event.subject.fx = event.x;
           event.subject.fy = event.y;
         })
-        .on('end', (event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>) => {
+        .on('end', (event: D3DragEvent<SVGGElement, GraphNode, GraphNode>) => {
           if (!event.active) simulation.alphaTarget(0);
           event.subject.fx = null;
           event.subject.fy = null;
@@ -286,21 +293,21 @@ export function D3NetworkGraph({ nodes: tree, activeCycle }: D3NetworkGraphProps
   const handleZoomIn = useCallback(() => {
     const svg = svgRef.current;
     if (!svg || !zoomRef.current) return;
-    d3.select(svg).transition().duration(300).call(zoomRef.current.scaleBy, 1.3);
+    select(svg).transition().duration(300).call(zoomRef.current.scaleBy, 1.3);
   }, []);
 
   const handleZoomOut = useCallback(() => {
     const svg = svgRef.current;
     if (!svg || !zoomRef.current) return;
-    d3.select(svg).transition().duration(300).call(zoomRef.current.scaleBy, 0.7);
+    select(svg).transition().duration(300).call(zoomRef.current.scaleBy, 0.7);
   }, []);
 
   const handleResetView = useCallback(() => {
     const svg = svgRef.current;
     if (!svg || !zoomRef.current) return;
-    d3.select(svg).transition().duration(500).call(
+    select(svg).transition().duration(500).call(
       zoomRef.current.transform,
-      d3.zoomIdentity.translate(dimensions.width / 2, dimensions.height / 2).scale(0.8).translate(-dimensions.width / 2, -dimensions.height / 2),
+      zoomIdentity.translate(dimensions.width / 2, dimensions.height / 2).scale(0.8).translate(-dimensions.width / 2, -dimensions.height / 2),
     );
   }, [dimensions]);
 
@@ -326,7 +333,7 @@ export function D3NetworkGraph({ nodes: tree, activeCycle }: D3NetworkGraphProps
       <ZoomControls
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
-        onResetView={handleResetView}
+        onReset={handleResetView}
       />
 
       {/* Legend */}

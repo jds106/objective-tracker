@@ -295,14 +295,23 @@ The AI assistant should help ensure:
 
 The UI must be **beautiful and engaging**. This is not an enterprise admin tool — it should feel like a product people *want* to use. Design principles:
 
-- **Dark mode by default** with a light mode option
+- **Dark mode by default** with a light mode option. A theme toggle in the sidebar footer switches between dark, light, and system modes. Preference is persisted to `localStorage` (`northstar-theme` key). CSS custom properties (`--color-surface`, `--color-text-primary`, etc.) drive theme-aware colours throughout the app.
 - **Vibrant accent colours** to indicate progress and health (greens for on-track, ambers for at-risk, reds for behind)
 - **Smooth animations** on all transitions — expanding objectives, switching views, updating progress
 - **Minimal chrome** — content-first, no unnecessary UI furniture
-- **Micro-interactions** — satisfying progress updates, subtle celebrations when objectives are completed
+- **Micro-interactions** — satisfying progress updates, subtle celebrations when objectives are completed. A confetti animation fires when a key result reaches 100% progress during a check-in, or when all check-ins succeed on the bulk check-in page.
 - **Mobile-responsive** — check-ins should work well on a phone
+- **Password strength indicator** — the registration form includes an animated strength meter (weak/fair/strong/very strong) with contextual hints for improvement.
 
 ### 5.3 Key Views
+
+#### 5.3.0 Application Layout
+
+The main layout has a collapsible sidebar (hidden on mobile, toggled via hamburger) containing:
+
+- **Navigation links**: Dashboard, Cascade Tree, Network Graph, Team (managers only), Check-in, Admin (admin only), Profile
+- **Cycle Switcher**: A dropdown listing all cycles (active first, then by start date descending). The active cycle is labelled "(current)". Selecting a historical cycle filters the dashboard, cascade tree, and team view to show that cycle's data. A "Back to current cycle" button and a prominent banner appear when viewing a historical cycle. Create/edit actions are disabled when viewing historical data. The bulk check-in page always uses the active cycle.
+- **Theme toggle**: Sun/moon icon button in the sidebar footer switching between dark and light modes.
 
 #### 5.3.1 Dashboard (Home)
 
@@ -312,17 +321,20 @@ The user's personal dashboard showing:
 - **Overall Completion**: An aggregated progress metric across all objectives
 - **Upcoming Check-ins**: When the next check-in is due
 - **Recent Activity**: Latest check-ins from the user and their team
-- **Nudges**: AI-generated suggestions (e.g. "Your KR 'Reduce latency to <200ms' hasn't been updated in 3 weeks")
+- **Stale KR Nudges**: Time-based nudges for key results that haven't received a check-in in 14+ days. Sorted by staleness (most stale first), limited to the top 5 items. Each nudge links to the parent objective's detail page. Hidden when viewing a historical cycle.
+- **AI Nudges** (when AI is enabled): AI-generated suggestions for improving objective quality or alignment
 
 #### 5.3.2 Objective Detail
 
 A full view of a single objective:
 
+- **Back navigation**: A breadcrumb bar showing Back button → Dashboard → objective title
 - Title, description, status
 - Parent linkage (with a visual breadcrumb showing the cascade path up to the company objective)
 - Key results with detailed progress visualisation appropriate to type
 - Check-in history as a timeline
 - Child objectives linked to this objective's KRs (if any — for managers)
+- **Delete protection**: Deleting an objective that has linked child objectives shows a 409 conflict dialog listing the children, with an option to force-delete (which unlinks children first)
 - AI assistant sidebar for editing/improving the objective
 
 #### 5.3.3 Cascade Tree View (Primary Navigation)
@@ -634,9 +646,9 @@ objective-tracker/
 - `POST /api/objectives` — Create objective
 - `GET /api/objectives/:id` — Get objective detail (includes `canEdit` boolean indicating whether the requester can edit this objective)
 - `PUT /api/objectives/:id` — Update objective
-- `DELETE /api/objectives/:id` — Delete objective (draft only)
+- `DELETE /api/objectives/:id` — Delete objective (draft only). Returns 409 with `linkedChildren` array if the objective has linked child objectives. Pass `?force=true` to unlink children and proceed with deletion.
 - `GET /api/objectives/:id/cascade` — Get cascade path for objective (visibility-filtered: restricted objectives replaced with placeholders)
-- `POST /api/objectives/:id/rollforward` — Roll forward to new cycle
+- `POST /api/objectives/:id/rollforward` — Roll forward an active objective to a new cycle (copies objective + KRs with reset progress, marks original as `rolled_forward`)
 
 **Key Results**
 - `POST /api/objectives/:id/key-results` — Add KR to objective
@@ -645,11 +657,7 @@ objective-tracker/
 - `POST /api/key-results/:id/check-in` — Record a check-in
 
 **Cascade**
-- `GET /api/cascade/tree` — Full cascade tree (scoped to user visibility). Company-level objectives are always included as root nodes. Admin users see the full tree for all users.
-- `GET /api/cascade/graph` — Network graph data (scoped to user visibility)
-
-**Objectives — Rollforward**
-- `POST /api/objectives/:id/rollforward` — Roll forward an active objective to a new cycle (copies objective + KRs with reset progress, marks original as `rolled_forward`)
+- `GET /api/cascade/tree` — Full cascade tree (scoped to user visibility). Company-level objectives are always included as root nodes. Admin users see the full tree for all users. The frontend also uses this data for the network graph view (force-directed layout computed client-side from the tree structure).
 
 **Cycles**
 - `GET /api/cycles` — List all cycles
@@ -662,7 +670,7 @@ objective-tracker/
 
 **Admin** (all endpoints require `role: 'admin'`)
 - `POST /api/admin/users` — Create a new user
-- `GET /api/admin/users` — List all users
+- `GET /api/admin/users` — List all users (also used by the admin Org Tree tab to build the reporting hierarchy client-side)
 - `PUT /api/admin/users/:id` — Update user (role, department, manager, job title, level, displayName)
 - `DELETE /api/admin/users/:id` — Delete user (cannot self-delete)
 - `POST /api/admin/users/:id/reset-password` — Generate temporary password for user
