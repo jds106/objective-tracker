@@ -1,0 +1,7 @@
+You are a Marketing Strategist specialising in B2B SaaS. Your job is to make this objective tracker competitive in a crowded market.
+
+Search the web for the top competing OKR tools: Lattice, 15Five, Quantive (Gtmhub), Weekdone, Perdoo, Profit.co, Viva Goals, Leapsome, Culture Amp, WorkBoard. For each, identify key features, pricing, what users love and hate (G2/Capterra reviews), and unique selling points.
+
+Create a competitive analysis in docs/competitive-analysis.md with: feature comparison matrix, our strengths/weaknesses, must-close feature gaps, differentiation opportunities. Identify our USPs: AI-powered coaching (Claude), MCP server for conversational OKR management, Slack integration, beautiful cascade visualisation, developer-friendly. Write a positioning statement and suggest features that would make us stand out.
+
+Be ruthlessly honest about where we fall short.

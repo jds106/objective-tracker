@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { hierarchy, tree } from 'd3-hierarchy';
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
@@ -37,52 +37,6 @@ interface FlatLink {
   targetDepth: number;
 }
 
-/** Compute a d3 ZoomTransform that fits all visible nodes within the container */
-function computeFitTransform(
-  flatNodes: FlatNode[],
-  width: number,
-  height: number,
-  nodeWidth: number,
-  nodeHeight: number,
-  padding = 60,
-) {
-  if (flatNodes.length === 0 || width <= 0 || height <= 0) {
-    return zoomIdentity.translate(width / 2, 50);
-  }
-
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-
-  for (const node of flatNodes) {
-    const left = node.x - nodeWidth / 2;
-    const right = node.x + nodeWidth / 2;
-    const top = node.y;
-    const bottom = node.y + nodeHeight;
-    if (left < minX) minX = left;
-    if (right > maxX) maxX = right;
-    if (top < minY) minY = top;
-    if (bottom > maxY) maxY = bottom;
-  }
-
-  const treeWidth = maxX - minX;
-  const treeHeight = maxY - minY;
-  const availableWidth = width - padding * 2;
-  const availableHeight = height - padding * 2;
-
-  const scaleX = treeWidth > 0 ? availableWidth / treeWidth : 1;
-  const scaleY = treeHeight > 0 ? availableHeight / treeHeight : 1;
-  const k = Math.min(scaleX, scaleY, 1); // Never zoom past 1:1
-
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
-
-  return zoomIdentity
-    .translate(width / 2 - centerX * k, height / 2 - centerY * k)
-    .scale(k);
-}
-
 /** Collect IDs at the first two levels (depth 0 and 1) of the cascade tree */
 function collectDefaultExpandedIds(roots: CascadeNode[]): Set<string> {
   const set = new Set<string>();
@@ -103,12 +57,11 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
   // Track nodes the user has manually collapsed so we don't re-expand them
   const manuallyCollapsedRef = useRef<Set<string>>(new Set());
 
-  const svgRef = useRef<SVGSVGElement>(null);
-  const gRef = useRef<SVGGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  const zoomInitialisedRef = useRef(false);
-  const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
+  const zoomTargetRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<ZoomBehavior<HTMLDivElement, unknown> | null>(null);
+
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   // BUG-021: When nodes prop changes, add new node IDs to expanded set
   // (for the first two levels) while preserving manually collapsed state.
@@ -140,9 +93,14 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
     });
   }, []);
 
-  // Build hierarchy respecting expanded state
-  const { flatNodes, flatLinks } = useMemo(() => {
-    if (nodes.length === 0) return { flatNodes: [] as FlatNode[], flatLinks: [] as FlatLink[] };
+  // Build hierarchy respecting expanded state, then pre-centre coordinates
+  // in the container so foreignObject content is at positive screen positions.
+  // This avoids relying on SVG <g> transforms or viewBox, which Safari doesn't
+  // reliably apply to foreignObject children.
+  const { flatNodes, flatLinks, svgWidth, svgHeight } = useMemo(() => {
+    if (nodes.length === 0 || containerSize.width <= 0 || containerSize.height <= 0) {
+      return { flatNodes: [] as FlatNode[], flatLinks: [] as FlatLink[], svgWidth: 0, svgHeight: 0 };
+    }
 
     // Create virtual root
     interface HierarchyData {
@@ -201,8 +159,54 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
       });
     });
 
-    return { flatNodes: flatNodesResult, flatLinks: flatLinksResult };
-  }, [nodes, expandedNodes]);
+    // Pre-centre: shift all coordinates so the tree's bounding box is centred
+    // in the container. This means foreignObject elements render at positive
+    // screen coordinates — no SVG transform or viewBox needed.
+    if (flatNodesResult.length > 0) {
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+
+      for (const n of flatNodesResult) {
+        const left = n.x - NODE_WIDTH / 2;
+        const right = n.x + NODE_WIDTH / 2;
+        const top = n.y;
+        const bottom = n.y + NODE_HEIGHT;
+        if (left < minX) minX = left;
+        if (right > maxX) maxX = right;
+        if (top < minY) minY = top;
+        if (bottom > maxY) maxY = bottom;
+      }
+
+      const treeWidth = maxX - minX;
+      const treeHeight = maxY - minY;
+
+      // Centre the tree in the container (never scale above 1:1 here)
+      const offsetX = containerSize.width / 2 - (minX + maxX) / 2;
+      const offsetY = containerSize.height / 2 - (minY + maxY) / 2;
+
+      for (const n of flatNodesResult) {
+        n.x += offsetX;
+        n.y += offsetY;
+      }
+      for (const l of flatLinksResult) {
+        l.sourceX += offsetX;
+        l.sourceY += offsetY;
+        l.targetX += offsetX;
+        l.targetY += offsetY;
+      }
+
+      // SVG canvas size — at least as large as the container, but also
+      // large enough to hold the entire tree with padding
+      const padding = 200;
+      const w = Math.max(containerSize.width, treeWidth + padding * 2);
+      const h = Math.max(containerSize.height, treeHeight + padding * 2);
+      return { flatNodes: flatNodesResult, flatLinks: flatLinksResult, svgWidth: w, svgHeight: h };
+    }
+
+    return { flatNodes: flatNodesResult, flatLinks: flatLinksResult, svgWidth: containerSize.width, svgHeight: containerSize.height };
+  }, [nodes, expandedNodes, containerSize]);
 
   // Resize observer
   useEffect(() => {
@@ -222,63 +226,50 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
     return () => observer.disconnect();
   }, []);
 
-  // BUG-022: Set up zoom behaviour once on mount — not on every resize.
-  useEffect(() => {
-    const svg = svgRef.current;
-    const g = gRef.current;
-    if (!svg || !g) return;
+  // Set up d3-zoom on the container div. The zoom handler applies a CSS
+  // transform to an inner wrapper div — CSS transforms on HTML elements work
+  // reliably across all browsers including Safari with foreignObject.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const target = zoomTargetRef.current;
+    if (!container || !target) return;
 
-    const zoomBehavior = zoom<SVGSVGElement, unknown>()
+    const zoomBehavior = zoom<HTMLDivElement, unknown>()
       .scaleExtent([0.15, 2])
       .on('zoom', (event) => {
-        g.setAttribute('transform', event.transform.toString());
+        const { x, y, k } = event.transform;
+        target.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+        target.style.transformOrigin = '0 0';
       });
 
     zoomRef.current = zoomBehavior;
-    select(svg).call(zoomBehavior);
+    select(container).call(zoomBehavior);
 
     return () => {
-      select(svg).on('.zoom', null);
+      select(container).on('.zoom', null);
     };
   }, []);
 
-  // Set initial transform once — fit all visible nodes within the viewport
-  useEffect(() => {
-    if (zoomInitialisedRef.current) return;
-    const svg = svgRef.current;
-    const zoomBehavior = zoomRef.current;
-    if (!svg || !zoomBehavior || containerSize.width <= 0 || flatNodes.length === 0) return;
-
-    const fitTransform = computeFitTransform(
-      flatNodes, containerSize.width, containerSize.height, NODE_WIDTH, NODE_HEIGHT,
-    );
-    select(svg).call(zoomBehavior.transform, fitTransform);
-    zoomInitialisedRef.current = true;
-  }, [containerSize.width, containerSize.height, flatNodes]);
-
   const handleZoomIn = useCallback(() => {
-    const svg = svgRef.current;
+    const container = containerRef.current;
     const zoomBehavior = zoomRef.current;
-    if (!svg || !zoomBehavior) return;
-    select(svg).transition().duration(300).call(zoomBehavior.scaleBy, 1.3);
+    if (!container || !zoomBehavior) return;
+    select(container).transition().duration(300).call(zoomBehavior.scaleBy, 1.3);
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    const svg = svgRef.current;
+    const container = containerRef.current;
     const zoomBehavior = zoomRef.current;
-    if (!svg || !zoomBehavior) return;
-    select(svg).transition().duration(300).call(zoomBehavior.scaleBy, 0.7);
+    if (!container || !zoomBehavior) return;
+    select(container).transition().duration(300).call(zoomBehavior.scaleBy, 0.7);
   }, []);
 
   const handleReset = useCallback(() => {
-    const svg = svgRef.current;
+    const container = containerRef.current;
     const zoomBehavior = zoomRef.current;
-    if (!svg || !zoomBehavior) return;
-    const fitTransform = computeFitTransform(
-      flatNodes, containerSize.width, containerSize.height, NODE_WIDTH, NODE_HEIGHT,
-    );
-    select(svg).transition().duration(500).call(zoomBehavior.transform, fitTransform);
-  }, [flatNodes, containerSize.width, containerSize.height]);
+    if (!container || !zoomBehavior) return;
+    select(container).transition().duration(500).call(zoomBehavior.transform, zoomIdentity);
+  }, []);
 
   if (nodes.length === 0) {
     return (
@@ -288,54 +279,60 @@ export function D3CascadeTree({ nodes }: D3CascadeTreeProps) {
     );
   }
 
-  return (
-    <div ref={containerRef} className="relative w-full h-full min-h-[500px] rounded-xl bg-surface border border-slate-700/60 overflow-hidden">
-      <svg
-        ref={svgRef}
-        width={containerSize.width}
-        height={containerSize.height}
-        className="w-full h-full"
-      >
-        {/* Dot-grid canvas background for spatial orientation */}
-        <defs>
-          <pattern id="cascade-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-            <circle cx="12" cy="12" r="0.75" fill="#334155" fillOpacity="0.5" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#cascade-grid)" />
+  const hasContent = flatNodes.length > 0 && containerSize.width > 0;
 
-        <g ref={gRef}>
-          <AnimatePresence>
-            {flatLinks.map(link => (
-              <TreeLink
-                key={`${link.sourceId}-${link.targetId}`}
-                sourceX={link.sourceX}
-                sourceY={link.sourceY}
-                targetX={link.targetX}
-                targetY={link.targetY}
-                nodeHeight={NODE_HEIGHT}
-                depth={link.targetDepth}
-              />
-            ))}
-          </AnimatePresence>
-          <AnimatePresence>
-            {flatNodes.map(fn => (
-              <TreeNodeCard
-                key={fn.id}
-                node={fn.cascadeNode}
-                x={fn.x}
-                y={fn.y}
-                width={NODE_WIDTH}
-                height={NODE_HEIGHT}
-                depth={fn.depth}
-                childCount={fn.cascadeNode.children.length}
-                isExpanded={expandedNodes.has(fn.id)}
-                onToggle={() => toggleNode(fn.id)}
-              />
-            ))}
-          </AnimatePresence>
-        </g>
-      </svg>
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full h-full min-h-[500px] rounded-xl border border-slate-700/60 overflow-hidden"
+      style={{
+        backgroundImage: 'radial-gradient(circle, rgba(51,65,85,0.5) 0.75px, transparent 0.75px)',
+        backgroundSize: '24px 24px',
+        backgroundColor: 'var(--color-surface, #0f172a)',
+      }}
+    >
+      {/* Inner wrapper — d3-zoom applies CSS transform to this div */}
+      <div ref={zoomTargetRef} style={{ width: svgWidth, height: svgHeight }}>
+        <svg
+          width={svgWidth || '100%'}
+          height={svgHeight || '100%'}
+          className="absolute top-0 left-0"
+        >
+          {hasContent && (
+            <>
+              <AnimatePresence>
+                {flatLinks.map(link => (
+                  <TreeLink
+                    key={`${link.sourceId}-${link.targetId}`}
+                    sourceX={link.sourceX}
+                    sourceY={link.sourceY}
+                    targetX={link.targetX}
+                    targetY={link.targetY}
+                    nodeHeight={NODE_HEIGHT}
+                    depth={link.targetDepth}
+                  />
+                ))}
+              </AnimatePresence>
+              <AnimatePresence>
+                {flatNodes.map(fn => (
+                  <TreeNodeCard
+                    key={fn.id}
+                    node={fn.cascadeNode}
+                    x={fn.x}
+                    y={fn.y}
+                    width={NODE_WIDTH}
+                    height={NODE_HEIGHT}
+                    depth={fn.depth}
+                    childCount={fn.cascadeNode.children.length}
+                    isExpanded={expandedNodes.has(fn.id)}
+                    onToggle={() => toggleNode(fn.id)}
+                  />
+                ))}
+              </AnimatePresence>
+            </>
+          )}
+        </svg>
+      </div>
       <ZoomControls onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} onReset={handleReset} />
     </div>
   );

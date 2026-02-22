@@ -15,6 +15,8 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage.js').then(m => ({ d
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage.js').then(m => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage.js').then(m => ({ default: m.ResetPasswordPage })));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.js').then(m => ({ default: m.DashboardPage })));
+const ObjectiveCreatePage = lazy(() => import('./pages/ObjectiveCreatePage.js').then(m => ({ default: m.ObjectiveCreatePage })));
+const ObjectiveEditPage = lazy(() => import('./pages/ObjectiveEditPage.js').then(m => ({ default: m.ObjectiveEditPage })));
 const ObjectiveDetailPage = lazy(() => import('./pages/ObjectiveDetailPage.js').then(m => ({ default: m.ObjectiveDetailPage })));
 const CascadeTreePage = lazy(() => import('./pages/CascadeTreePage.js').then(m => ({ default: m.CascadeTreePage })));
 const TeamPage = lazy(() => import('./pages/TeamPage.js').then(m => ({ default: m.TeamPage })));
@@ -75,6 +77,16 @@ export function App() {
                   <Route path="/check-in" element={
                     <ErrorBoundary>
                       <BulkCheckInPage />
+                    </ErrorBoundary>
+                  } />
+                  <Route path="/objectives/new" element={
+                    <ErrorBoundary>
+                      <ObjectiveCreatePage />
+                    </ErrorBoundary>
+                  } />
+                  <Route path="/objectives/:id/edit" element={
+                    <ErrorBoundary>
+                      <ObjectiveEditPage />
                     </ErrorBoundary>
                   } />
                   <Route path="/objectives/:id" element={

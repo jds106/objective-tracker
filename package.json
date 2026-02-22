@@ -20,5 +20,11 @@
     "jsdom": "^28.1.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "@types/d3-drag": "^3.0.7",
+    "@types/d3-force": "^3.0.10",
+    "d3-drag": "^3.0.0",
+    "d3-force": "^3.0.0"
   }
 }

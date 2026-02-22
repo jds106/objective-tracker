@@ -7,6 +7,7 @@ import type {
     AdminCreateUserBody,
     UpdateUserAdminBody,
     CompanyObjectiveBody,
+    AdminCreateObjectiveForUserBody,
     CreateCycleBody,
     UpdateCycleBody,
 } from '@objective-tracker/shared';
@@ -71,6 +72,10 @@ export function getAllObjectives(cycleId?: string) {
 
 export function createCompanyObjective(input: CompanyObjectiveBody) {
     return apiClient.post<ApiResponse<Objective>>('/admin/objectives/company', input);
+}
+
+export function createObjectiveForUser(input: AdminCreateObjectiveForUserBody) {
+    return apiClient.post<ApiResponse<Objective>>('/admin/objectives/for-user', input);
 }
 
 // ── Cycles ──────────────────────────────────────────

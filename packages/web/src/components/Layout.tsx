@@ -1,6 +1,5 @@
-import { useState, useCallback, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, Suspense, type ReactNode } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   Squares2X2Icon,
   ShareIcon,
@@ -346,17 +345,16 @@ export function Layout() {
               </button>
             </div>
           )}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15, ease: 'easeInOut' }}
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          <Suspense fallback={
+            <div className="flex min-h-[400px] items-center justify-center" role="status">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+                <span className="text-sm text-slate-400">Loading…</span>
+              </div>
+            </div>
+          }>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>
