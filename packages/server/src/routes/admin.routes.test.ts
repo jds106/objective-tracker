@@ -170,7 +170,7 @@ describe('Admin Routes', () => {
         const res = await request(app)
             .post('/api/admin/objectives/company')
             .set('Authorization', `Bearer ${token}`)
-            .send({ cycleId, title: 'Grow Revenue 20%', description: 'Company wide goal' })
+            .send({ cycleId, title: 'Grow Revenue 20%', description: 'Company wide goal', targetDate: '2026-12-31' })
             .expect(201);
 
         expect(res.body.data.ownerId).toBe('company');

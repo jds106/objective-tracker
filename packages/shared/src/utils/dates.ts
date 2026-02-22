@@ -44,6 +44,20 @@ export function formatDateTime(dateStr: string): string {
  * - < 7 days → "Xd ago"
  * - ≥ 7 days → YYYY-MM-DD
  */
+/**
+ * Find the quarter in a cycle whose date range contains today and return its endDate.
+ * Falls back to the cycle's endDate if no quarter matches.
+ */
+export function getCurrentQuarterEndDate(cycle: { quarters: Array<{ startDate: string; endDate: string }>; endDate: string }): string {
+  const now = new Date();
+  for (const q of cycle.quarters) {
+    if (now >= new Date(q.startDate) && now <= new Date(q.endDate)) {
+      return q.endDate;
+    }
+  }
+  return cycle.endDate;
+}
+
 export function formatRelativeTime(dateStr: string): string {
   const then = new Date(dateStr).getTime();
   if (isNaN(then)) return dateStr;

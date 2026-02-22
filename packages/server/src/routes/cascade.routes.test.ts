@@ -82,7 +82,7 @@ describe('Cascade Routes', () => {
       await request(app)
         .post('/api/admin/objectives/company')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ cycleId: cycle.id, title: 'Increase revenue' });
+        .send({ cycleId: cycle.id, title: 'Increase revenue', targetDate: '2026-12-31' });
 
       // Now fetch cascade tree
       const res = await request(app)
@@ -133,7 +133,7 @@ describe('Cascade Routes', () => {
       await request(app)
         .post('/api/objectives')
         .set('Authorization', `Bearer ${user1Token}`)
-        .send({ cycleId: cycle.id, title: 'User 1 objective' });
+        .send({ cycleId: cycle.id, title: 'User 1 objective', targetDate: '2026-12-31' });
 
       // Login as user 2
       const login2Res = await request(app).post('/api/auth/login').send({ email: 'u2@test.com', password: 'password123' });

@@ -1,7 +1,7 @@
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Objective } from '@objective-tracker/shared';
-import { calculateObjectiveProgress, calculateHealthStatus, type HealthStatus } from '@objective-tracker/shared';
+import { calculateObjectiveProgress, calculateHealthStatus, formatDate, type HealthStatus } from '@objective-tracker/shared';
 import { useCycle } from '../../contexts/cycle.context.js';
 import { ProgressRing } from '../ProgressRing.js';
 import { HealthBadge } from '../HealthBadge.js';
@@ -15,6 +15,7 @@ const healthBorderColours: Record<HealthStatus, string> = {
   on_track: 'border-l-emerald-500',
   at_risk: 'border-l-amber-500',
   behind: 'border-l-red-500',
+  late: 'border-l-rose-500',
   not_started: 'border-l-slate-600',
 };
 
@@ -28,8 +29,11 @@ export const ObjectiveCard = memo(function ObjectiveCard({ objective }: Objectiv
 
   const health = useMemo(() => {
     const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
-    return calculateHealthStatus(progress, selectedCycle, allCheckIns);
-  }, [objective.keyResults, progress, selectedCycle]);
+    return calculateHealthStatus(progress, selectedCycle, allCheckIns, {
+      targetDate: objective.targetDate,
+      objectiveStatus: objective.status,
+    });
+  }, [objective.keyResults, objective.targetDate, objective.status, progress, selectedCycle]);
 
   return (
     <Link
@@ -51,6 +55,9 @@ export const ObjectiveCard = memo(function ObjectiveCard({ objective }: Objectiv
       </div>
       <p className="mt-3 text-xs text-slate-500">
         {objective.keyResults.length} key result{objective.keyResults.length !== 1 ? 's' : ''}
+        {objective.targetDate && (
+          <span className="ml-2">· Due {formatDate(objective.targetDate)}</span>
+        )}
       </p>
     </Link>
   );

@@ -5,6 +5,8 @@ import type {
   UpdateObjectiveInput,
   CycleRepository,
   KeyResultRepository,
+  Cycle,
+  TargetDateType,
 } from '@objective-tracker/shared';
 import { NotFoundError, ValidationError } from '@objective-tracker/shared';
 
@@ -15,14 +17,42 @@ export class ObjectiveService {
     private readonly keyResultRepo?: KeyResultRepository,
   ) {}
 
+  /** Fill in default targetDateType/targetDate for objectives created before this feature existed. */
+  private async backfillTargetDate(objectives: Objective[]): Promise<Objective[]> {
+    const cycleLookup = new Map<string, Cycle>();
+    const result: Objective[] = [];
+    for (const obj of objectives) {
+      if (!obj.targetDate) {
+        let cycle = cycleLookup.get(obj.cycleId);
+        if (!cycle) {
+          const fetched = await this.cycleRepo.getById(obj.cycleId);
+          if (fetched) {
+            cycle = fetched;
+            cycleLookup.set(obj.cycleId, cycle);
+          }
+        }
+        result.push({
+          ...obj,
+          targetDateType: 'quarterly',
+          targetDate: cycle?.endDate ?? new Date().toISOString().split('T')[0]!,
+        });
+      } else {
+        result.push(obj);
+      }
+    }
+    return result;
+  }
+
   async getByUserId(userId: string, cycleId?: string): Promise<Objective[]> {
-    return this.objectiveRepo.getByUserId(userId, cycleId);
+    const objectives = await this.objectiveRepo.getByUserId(userId, cycleId);
+    return this.backfillTargetDate(objectives);
   }
 
   async getById(id: string): Promise<Objective> {
     const objective = await this.objectiveRepo.getById(id);
     if (!objective) throw new NotFoundError('Objective not found');
-    return objective;
+    const [filled] = await this.backfillTargetDate([objective]);
+    return filled;
   }
 
   async create(ownerId: string, input: Omit<CreateObjectiveInput, 'ownerId'>): Promise<Objective> {
@@ -35,12 +65,12 @@ export class ObjectiveService {
     return this.objectiveRepo.create({ ...input, ownerId });
   }
 
-  async update(id: string, updates: UpdateObjectiveInput): Promise<Objective> {
+  async update(id: string, updates: UpdateObjectiveInput, options?: { requesterRole?: string }): Promise<Objective> {
     const objective = await this.objectiveRepo.getById(id);
     if (!objective) throw new NotFoundError('Objective not found');
 
     if (updates.status) {
-      this.validateStatusTransition(objective.status, updates.status);
+      this.validateStatusTransition(objective.status, updates.status, options?.requesterRole);
     }
 
     return this.objectiveRepo.update(id, updates);
@@ -102,6 +132,37 @@ export class ObjectiveService {
       throw new ValidationError('Cannot roll forward to a closed cycle');
     }
 
+    // Compute target date for the rolled-forward copy
+    const originalCycle = await this.cycleRepo.getById(original.cycleId);
+    let newTargetDateType: TargetDateType = original.targetDateType ?? 'quarterly';
+    let newTargetDate: string;
+
+    if (newTargetDateType === 'quarterly' && targetCycle.quarters.length > 0) {
+      // Find same-index quarter in target cycle
+      const origQuarterIndex = originalCycle
+        ? originalCycle.quarters.findIndex(q => original.targetDate <= q.endDate && original.targetDate >= q.startDate)
+        : -1;
+      const targetQuarter = origQuarterIndex >= 0 && origQuarterIndex < targetCycle.quarters.length
+        ? targetCycle.quarters[origQuarterIndex]
+        : targetCycle.quarters[0];
+      newTargetDate = targetQuarter!.endDate;
+    } else if (newTargetDateType === 'annual') {
+      const targetYear = new Date(targetCycle.startDate).getFullYear();
+      newTargetDate = `${targetYear}-12-31`;
+    } else {
+      // arbitrary: shift date forward by the difference between cycle start dates
+      if (originalCycle) {
+        const origStart = new Date(originalCycle.startDate).getTime();
+        const targetStart = new Date(targetCycle.startDate).getTime();
+        const shiftMs = targetStart - origStart;
+        const origTarget = new Date(original.targetDate ?? originalCycle.endDate);
+        const shifted = new Date(origTarget.getTime() + shiftMs);
+        newTargetDate = shifted.toISOString().split('T')[0]!;
+      } else {
+        newTargetDate = targetCycle.endDate;
+      }
+    }
+
     // Create a copy of the objective in the new cycle
     const newObjective = await this.objectiveRepo.create({
       ownerId: original.ownerId,
@@ -110,6 +171,8 @@ export class ObjectiveService {
       description: original.description,
       parentKeyResultId: null, // Don't carry forward parent links — they may not exist in the new cycle
       parentObjectiveId: null,
+      targetDateType: newTargetDateType,
+      targetDate: newTargetDate,
     });
 
     // Copy key results with progress reset to 0
@@ -147,7 +210,7 @@ export class ObjectiveService {
     return this.objectiveRepo.getById(newObjective.id) as Promise<Objective>;
   }
 
-  private validateStatusTransition(current: string, next: string): void {
+  private validateStatusTransition(current: string, next: string, requesterRole?: string): void {
     const allowed: Record<string, string[]> = {
       draft: ['active'],
       active: ['completed', 'cancelled', 'rolled_forward'],
@@ -155,6 +218,11 @@ export class ObjectiveService {
       cancelled: [],
       rolled_forward: [],
     };
+
+    // Admin-only: allow reverting active objectives back to draft
+    if (current === 'active' && next === 'draft' && requesterRole === 'admin') {
+      return;
+    }
 
     if (!allowed[current]?.includes(next)) {
       throw new ValidationError(

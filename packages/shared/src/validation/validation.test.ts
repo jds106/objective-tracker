@@ -114,6 +114,7 @@ describe('createObjectiveSchema', () => {
   const valid = {
     cycleId: '550e8400-e29b-41d4-a716-446655440000',
     title: 'Improve platform reliability',
+    targetDate: '2026-12-31',
   };
 
   it('should accept minimal valid input', () => {
@@ -132,6 +133,7 @@ describe('createObjectiveSchema', () => {
       description: 'Reduce downtime by 50%',
       parentKeyResultId: '550e8400-e29b-41d4-a716-446655440001',
       parentObjectiveId: '550e8400-e29b-41d4-a716-446655440002',
+      targetDate: '2026-12-31',
     };
     expect(createObjectiveSchema.safeParse(full).success).toBe(true);
   });
@@ -408,16 +410,17 @@ describe('companyObjectiveSchema', () => {
     const valid = {
       cycleId: '550e8400-e29b-41d4-a716-446655440000',
       title: 'Achieve 99.95% uptime',
+      targetDate: '2026-12-31',
     };
     expect(companyObjectiveSchema.safeParse(valid).success).toBe(true);
   });
 
   it('should reject empty title', () => {
-    expect(companyObjectiveSchema.safeParse({ cycleId: '550e8400-e29b-41d4-a716-446655440000', title: '' }).success).toBe(false);
+    expect(companyObjectiveSchema.safeParse({ cycleId: '550e8400-e29b-41d4-a716-446655440000', title: '', targetDate: '2026-12-31' }).success).toBe(false);
   });
 
   it('should default description to empty string', () => {
-    const result = companyObjectiveSchema.safeParse({ cycleId: '550e8400-e29b-41d4-a716-446655440000', title: 'Test' });
+    const result = companyObjectiveSchema.safeParse({ cycleId: '550e8400-e29b-41d4-a716-446655440000', title: 'Test', targetDate: '2026-12-31' });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.description).toBe('');

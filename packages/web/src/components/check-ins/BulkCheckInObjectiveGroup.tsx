@@ -21,6 +21,7 @@ const healthColourMap: Record<HealthStatus, string> = {
   on_track: 'text-emerald-500',
   at_risk: 'text-amber-500',
   behind: 'text-red-500',
+  late: 'text-rose-500',
   not_started: 'text-slate-500',
 };
 

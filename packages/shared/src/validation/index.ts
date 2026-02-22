@@ -15,8 +15,8 @@ export type { CreateKeyResultBody, UpdateKeyResultBody, CheckInBody } from './ke
 export { createCycleSchema, updateCycleSchema } from './cycle.schema.js';
 export type { CreateCycleBody, UpdateCycleBody } from './cycle.schema.js';
 
-export { adminCreateUserSchema, updateUserAdminSchema, companyObjectiveSchema } from './admin.schema.js';
-export type { AdminCreateUserBody, UpdateUserAdminBody, CompanyObjectiveBody } from './admin.schema.js';
+export { adminCreateUserSchema, updateUserAdminSchema, companyObjectiveSchema, adminCreateObjectiveForUserSchema } from './admin.schema.js';
+export type { AdminCreateUserBody, UpdateUserAdminBody, CompanyObjectiveBody, AdminCreateObjectiveForUserBody } from './admin.schema.js';
 
 export { updateProfileSchema, changePasswordSchema } from './user.schema.js';
 export type { UpdateProfileInput, ChangePasswordInput } from './user.schema.js';

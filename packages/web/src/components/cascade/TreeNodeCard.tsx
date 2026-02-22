@@ -23,6 +23,7 @@ const borderColours: Record<HealthStatus, string> = {
   on_track: 'border-emerald-500/50',
   at_risk: 'border-amber-500/50',
   behind: 'border-red-500/50',
+  late: 'border-rose-500/50',
   not_started: 'border-slate-600',
 };
 

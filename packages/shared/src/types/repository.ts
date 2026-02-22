@@ -1,5 +1,5 @@
 import type { User, UserWithPassword, UserRole } from './user.js';
-import type { Objective, ObjectiveStatus } from './objective.js';
+import type { Objective, ObjectiveStatus, TargetDateType } from './objective.js';
 import type { KeyResult, KeyResultType, KeyResultConfig } from './key-result.js';
 import type { CheckIn } from './check-in.js';
 import type { Cycle, CycleStatus, Quarter } from './cycle.js';
@@ -45,6 +45,8 @@ export interface CreateObjectiveInput {
   description: string;
   parentKeyResultId: string | null;
   parentObjectiveId: string | null;
+  targetDateType: TargetDateType;
+  targetDate: string;
   rolledForwardFrom?: string;
 }
 
@@ -54,6 +56,8 @@ export interface UpdateObjectiveInput {
   status?: ObjectiveStatus;
   parentKeyResultId?: string | null;
   parentObjectiveId?: string | null;
+  targetDateType?: TargetDateType;
+  targetDate?: string;
 }
 
 export interface ObjectiveRepository {

@@ -65,6 +65,8 @@ export class JsonObjectiveRepository implements ObjectiveRepository {
       parentKeyResultId: input.parentKeyResultId,
       parentObjectiveId: input.parentObjectiveId,
       status: 'draft',
+      targetDateType: input.targetDateType,
+      targetDate: input.targetDate,
       keyResults: [],
       createdAt: now,
       updatedAt: now,

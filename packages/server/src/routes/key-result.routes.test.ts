@@ -65,6 +65,7 @@ describe('Key Result Routes', () => {
         description: '',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       });
     objectiveId = objRes.body.data.id;
   });

@@ -70,6 +70,7 @@ describe('Objective Routes', () => {
         description: 'Reduce downtime and improve monitoring',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       })
       .expect(201);
 
@@ -88,6 +89,7 @@ describe('Objective Routes', () => {
         description: '',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       });
 
     await request(app)
@@ -99,6 +101,7 @@ describe('Objective Routes', () => {
         description: '',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       });
 
     const res = await request(app)
@@ -119,6 +122,7 @@ describe('Objective Routes', () => {
         description: 'Description',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       });
 
     const id = createRes.body.data.id;
@@ -141,6 +145,7 @@ describe('Objective Routes', () => {
         description: '',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       });
 
     const id = createRes.body.data.id;
@@ -164,6 +169,7 @@ describe('Objective Routes', () => {
         description: '',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       });
 
     const id = createRes.body.data.id;
@@ -189,6 +195,7 @@ describe('Objective Routes', () => {
         description: '',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       });
 
     const id = createRes.body.data.id;
@@ -214,6 +221,7 @@ describe('Objective Routes', () => {
         description: '',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDate: '2026-12-31',
       });
 
     const id = createRes.body.data.id;

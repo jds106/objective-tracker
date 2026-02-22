@@ -19,12 +19,33 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
     }
   });
 
-  /** Company-level objectives — visible to all authenticated users */
+  /** Company-level objectives — visible to all authenticated users.
+   *  Includes both ownerId='company' objectives and objectives owned by admin users,
+   *  since admin-created objectives are effectively top-level organisational goals. */
   router.get('/company', auth, async (req, res, next) => {
     try {
       const cycleId = req.query.cycleId as string | undefined;
-      const objectives = await deps.objectiveService.getByUserId('company', cycleId);
-      res.json({ data: objectives });
+
+      // Fetch company pseudo-user objectives
+      const companyObjectives = await deps.objectiveService.getByUserId('company', cycleId);
+
+      // Also fetch objectives from admin users (they're top-level too)
+      const allUsers = await deps.userRepo.getAll();
+      const adminIds = allUsers.filter(u => u.role === 'admin').map(u => u.id);
+      const adminObjectiveArrays = await Promise.all(
+        adminIds.map(id => deps.objectiveService.getByUserId(id, cycleId)),
+      );
+      const adminObjectives = adminObjectiveArrays.flat();
+
+      // Deduplicate by id (in case of overlap)
+      const seen = new Set<string>();
+      const combined = [...companyObjectives, ...adminObjectives].filter(o => {
+        if (seen.has(o.id)) return false;
+        seen.add(o.id);
+        return true;
+      });
+
+      res.json({ data: combined });
     } catch (err) {
       if ((err as { name?: string }).name === 'NotFoundError') {
         res.json({ data: [] });
@@ -66,7 +87,7 @@ export function createObjectiveRoutes(deps: RouteDependencies): Router {
         res.status(403).json({ error: 'You do not have permission to edit this objective' });
         return;
       }
-      const updated = await deps.objectiveService.update(req.params.id, req.body);
+      const updated = await deps.objectiveService.update(req.params.id, req.body, { requesterRole: req.user!.role });
       res.json({ data: updated });
     } catch (err) {
       next(err);

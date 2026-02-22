@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomBytes } from 'node:crypto';
-import { updateUserAdminSchema, companyObjectiveSchema, adminCreateUserSchema, createCycleSchema, updateCycleSchema, NotFoundError } from '@objective-tracker/shared';
+import { updateUserAdminSchema, companyObjectiveSchema, adminCreateUserSchema, adminCreateObjectiveForUserSchema, createCycleSchema, updateCycleSchema, NotFoundError } from '@objective-tracker/shared';
 import { validate } from '../middleware/validate.middleware.js';
 import { createAuthMiddleware } from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/require-admin.middleware.js';
@@ -266,13 +266,42 @@ export function createAdminRoutes(deps: RouteDependencies): Router {
     /** Create a company-level root objective */
     router.post('/objectives/company', validate(companyObjectiveSchema), async (req, res, next) => {
         try {
-            const { title, description, cycleId } = req.body;
+            const { title, description, cycleId, targetDateType, targetDate } = req.body;
             const objective = await deps.objectiveService.create('company', {
                 cycleId,
                 title,
                 description: description ?? '',
                 parentKeyResultId: null,
                 parentObjectiveId: null,
+                targetDateType,
+                targetDate,
+            });
+            res.status(201).json({ data: objective });
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    /** Create an objective on behalf of a specific user */
+    router.post('/objectives/for-user', validate(adminCreateObjectiveForUserSchema), async (req, res, next) => {
+        try {
+            const { ownerId, cycleId, title, description, parentObjectiveId, parentKeyResultId, targetDateType, targetDate } = req.body;
+
+            // Verify the target user exists
+            const targetUser = await deps.userRepo.getById(ownerId);
+            if (!targetUser) {
+                res.status(404).json({ error: 'Target user not found' });
+                return;
+            }
+
+            const objective = await deps.objectiveService.create(ownerId, {
+                cycleId,
+                title,
+                description: description ?? '',
+                parentKeyResultId: parentKeyResultId ?? null,
+                parentObjectiveId: parentObjectiveId ?? null,
+                targetDateType,
+                targetDate,
             });
             res.status(201).json({ data: objective });
         } catch (err) {

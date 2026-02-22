@@ -5,6 +5,7 @@ const statusStyles: Record<HealthStatus, { dot: string; text: string }> = {
   on_track: { dot: 'bg-health-on-track', text: 'text-emerald-400' },
   at_risk: { dot: 'bg-health-at-risk', text: 'text-amber-400' },
   behind: { dot: 'bg-health-behind', text: 'text-red-400' },
+  late: { dot: 'bg-rose-500', text: 'text-rose-400' },
   not_started: { dot: 'bg-health-not-started', text: 'text-slate-400' },
 };
 

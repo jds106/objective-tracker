@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ExclamationCircleIcon, CheckCircleIcon, QueueListIcon, BellAlertIcon } from '@heroicons/react/24/outline';
-import type { CreateObjectiveBody, UpdateObjectiveBody, KeyResult, Objective } from '@objective-tracker/shared';
-import { calculateObjectiveProgress, calculateHealthStatus, type HealthStatus, formatRelativeTime } from '@objective-tracker/shared';
+import type { KeyResult, Objective } from '@objective-tracker/shared';
+import { calculateObjectiveProgress, calculateHealthStatus, formatDate, formatRelativeTime, type HealthStatus } from '@objective-tracker/shared';
 import { useAuth } from '../contexts/auth.context.js';
 import { useCycle } from '../contexts/cycle.context.js';
 import { useObjectives } from '../hooks/useObjectives.js';
@@ -10,38 +10,50 @@ import { StatCards } from '../components/dashboard/StatCards.js';
 import { ObjectiveCard } from '../components/dashboard/ObjectiveCard.js';
 import { RecentActivity } from '../components/dashboard/RecentActivity.js';
 import { CreateObjectiveButton } from '../components/dashboard/CreateObjectiveButton.js';
-import { ObjectiveFormModal } from '../components/objectives/ObjectiveFormModal.js';
+import { StatusBadge } from '../components/StatusBadge.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorAlert } from '../components/ErrorAlert.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
 import { PageTransition } from '../components/PageTransition.js';
 
-const healthOrder: Record<HealthStatus, number> = {
-  behind: 0,
-  at_risk: 1,
-  not_started: 2,
-  on_track: 3,
-};
+type SortBy = 'target_date' | 'completion' | 'name' | 'last_updated';
+
+const CLOSED_STATUSES = new Set(['completed', 'cancelled', 'rolled_forward']);
 
 export function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { activeCycle, selectedCycle, isHistorical } = useCycle();
-  const { objectives, isLoading, error, refetch, create } = useObjectives(selectedCycle?.id);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const { objectives, isLoading, error, refetch } = useObjectives(selectedCycle?.id);
+  const [sortBy, setSortBy] = useState<SortBy>('target_date');
 
-  const handleCreate = async (input: CreateObjectiveBody | UpdateObjectiveBody) => {
-    await create(input as CreateObjectiveBody);
-  };
+  const activeObjectives = useMemo(
+    () => objectives.filter(o => !CLOSED_STATUSES.has(o.status)),
+    [objectives],
+  );
+  const historicalObjectives = useMemo(
+    () => objectives.filter(o => CLOSED_STATUSES.has(o.status)),
+    [objectives],
+  );
 
-  const sortedObjectives = [...objectives].sort((a, b) => {
-    const aProgress = calculateObjectiveProgress(a.keyResults.map(kr => kr.progress));
-    const bProgress = calculateObjectiveProgress(b.keyResults.map(kr => kr.progress));
-    const aCheckIns = a.keyResults.flatMap(kr => kr.checkIns);
-    const bCheckIns = b.keyResults.flatMap(kr => kr.checkIns);
-    const aHealth = calculateHealthStatus(aProgress, selectedCycle, aCheckIns);
-    const bHealth = calculateHealthStatus(bProgress, selectedCycle, bCheckIns);
-    return healthOrder[aHealth] - healthOrder[bHealth];
-  });
+  const sortedObjectives = useMemo(() => {
+    const list = [...activeObjectives];
+    switch (sortBy) {
+      case 'target_date':
+        return list.sort((a, b) => (a.targetDate ?? '').localeCompare(b.targetDate ?? ''));
+      case 'completion':
+        return list.sort((a, b) => {
+          const ap = calculateObjectiveProgress(a.keyResults.map(kr => kr.progress));
+          const bp = calculateObjectiveProgress(b.keyResults.map(kr => kr.progress));
+          return bp - ap;
+        });
+      case 'name':
+        return list.sort((a, b) => a.title.localeCompare(b.title));
+      case 'last_updated':
+        return list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      default:
+        return list;
+    }
+  }, [activeObjectives, sortBy]);
 
   // Find stale KRs — active objectives with KRs that haven't been updated in 14+ days
   const STALE_DAYS = 14;
@@ -159,46 +171,126 @@ export function DashboardPage() {
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-100">My Objectives</h3>
-          {!isHistorical && objectives.some(o => o.keyResults.length > 0) && (
-            <Link
-              to="/check-in"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30 transition-colors"
-            >
-              <CheckCircleIcon className="h-4 w-4" />
-              Check in on all
-            </Link>
-          )}
+          <div className="flex items-center gap-3">
+            {activeObjectives.length > 1 && (
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as SortBy)}
+                className="rounded-lg bg-surface border border-slate-700 px-2 py-1 text-xs text-slate-300 focus:border-indigo-500 focus:outline-none"
+                aria-label="Sort objectives"
+              >
+                <option value="target_date">Sort: Target date</option>
+                <option value="completion">Sort: Completion %</option>
+                <option value="name">Sort: Name</option>
+                <option value="last_updated">Sort: Last updated</option>
+              </select>
+            )}
+            {!isHistorical && objectives.some(o => o.keyResults.length > 0) && (
+              <Link
+                to="/check-in"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30 transition-colors"
+              >
+                <CheckCircleIcon className="h-4 w-4" />
+                Check in on all
+              </Link>
+            )}
+          </div>
         </div>
 
-        {objectives.length === 0 ? (
+        {activeObjectives.length === 0 && historicalObjectives.length === 0 ? (
           <EmptyState
             icon={<QueueListIcon className="h-12 w-12" />}
             title={isHistorical ? 'No objectives in this cycle' : 'No objectives yet'}
             description={
               isHistorical
                 ? 'There are no objectives recorded for this historical cycle.'
-                : 'Create your first objective to start tracking your goals and key results.'
+                : isAdmin
+                  ? 'Use the Admin panel to create company objectives or objectives for users.'
+                  : 'Create your first objective to start tracking your goals and key results.'
             }
             action={
-              !isHistorical && activeCycle && (
-                <button
-                  onClick={() => setShowCreateModal(true)}
+              !isHistorical && !isAdmin && activeCycle && (
+                <Link
+                  to="/objectives/new"
                   className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
                 >
                   Create Objective
-                </button>
+                </Link>
               )
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {sortedObjectives.map(obj => (
-              <ObjectiveCard key={obj.id} objective={obj} />
-            ))}
-            {!isHistorical && activeCycle && <CreateObjectiveButton onClick={() => setShowCreateModal(true)} />}
-          </div>
+          <>
+            {activeObjectives.length === 0 ? (
+              <p className="text-sm text-slate-500 mb-4">No active objectives. All objectives are in the historical section below.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {sortedObjectives.map(obj => (
+                  <ObjectiveCard key={obj.id} objective={obj} />
+                ))}
+                {!isHistorical && !isAdmin && activeCycle && <CreateObjectiveButton />}
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Historical objectives */}
+      {historicalObjectives.length > 0 && (
+        <div className="mt-8">
+          <details className="group">
+            <summary className="cursor-pointer list-none">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-500 group-open:text-slate-300 transition-colors">
+                  ▸
+                </span>
+                <h3 className="text-sm font-semibold text-slate-400 group-open:text-slate-300 transition-colors">
+                  Historical Objectives ({historicalObjectives.length})
+                </h3>
+              </div>
+            </summary>
+            <div className="mt-3 overflow-x-auto rounded-xl border border-slate-700 bg-surface-raised">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700 text-left text-xs text-slate-500">
+                    <th className="px-4 py-2 font-medium">Title</th>
+                    <th className="px-4 py-2 font-medium">Status</th>
+                    <th className="px-4 py-2 font-medium">Target Date</th>
+                    <th className="px-4 py-2 font-medium text-right">Progress</th>
+                    <th className="px-4 py-2 font-medium text-right">Updated</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/50">
+                  {historicalObjectives.map(obj => {
+                    const p = calculateObjectiveProgress(obj.keyResults.map(kr => kr.progress));
+                    return (
+                      <tr key={obj.id} className="hover:bg-slate-700/20 transition-colors">
+                        <td className="px-4 py-2">
+                          <Link to={`/objectives/${obj.id}`} className="text-slate-200 hover:text-indigo-300 transition-colors truncate block max-w-xs">
+                            {obj.title}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-2">
+                          <StatusBadge status={obj.status} />
+                        </td>
+                        <td className="px-4 py-2 text-slate-400 text-xs">
+                          {obj.targetDate ? formatDate(obj.targetDate) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right text-slate-300 text-xs">
+                          {Math.round(p)}%
+                        </td>
+                        <td className="px-4 py-2 text-right text-slate-500 text-xs">
+                          {formatRelativeTime(obj.updatedAt)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      )}
 
       <div className="mt-8">
         <h3 className="text-lg font-semibold text-slate-100 mb-4">Recent Activity</h3>
@@ -207,14 +299,6 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {activeCycle && (
-        <ObjectiveFormModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSubmit={handleCreate}
-          cycleId={activeCycle.id}
-        />
-      )}
     </PageTransition>
   );
 }

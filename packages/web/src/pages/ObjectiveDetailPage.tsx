@@ -7,10 +7,10 @@ import type {
   CreateKeyResultBody,
   UpdateKeyResultBody,
   CheckInBody,
-  UpdateObjectiveBody,
   AiReviewResult,
 } from '@objective-tracker/shared';
-import { calculateObjectiveProgress, calculateHealthStatus } from '@objective-tracker/shared';
+import { calculateObjectiveProgress, calculateHealthStatus, formatDate } from '@objective-tracker/shared';
+import { useAuth } from '../contexts/auth.context.js';
 import { useCycle } from '../contexts/cycle.context.js';
 import { useObjective } from '../hooks/useObjective.js';
 import { CascadeBreadcrumb } from '../components/CascadeBreadcrumb.js';
@@ -20,8 +20,6 @@ import { ProgressRing } from '../components/ProgressRing.js';
 import { KeyResultList } from '../components/key-results/KeyResultList.js';
 import { KeyResultFormModal } from '../components/key-results/KeyResultFormModal.js';
 import { CheckInModal } from '../components/check-ins/CheckInModal.js';
-import { CheckInTimeline } from '../components/check-ins/CheckInTimeline.js';
-import { ObjectiveFormModal } from '../components/objectives/ObjectiveFormModal.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { Modal } from '../components/Modal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
@@ -34,12 +32,12 @@ import * as aiApi from '../services/ai.api.js';
 export function ObjectiveDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const { activeCycle, selectedCycle, allCycles } = useCycle();
   const { objective, canEdit, isLoading, error, refetch } = useObjective(id ?? '');
 
   const [celebrating, triggerCelebration] = useCelebration();
   const [cascadePath, setCascadePath] = useState<Objective[]>([]);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [showAddKR, setShowAddKR] = useState(false);
   const [editingKR, setEditingKR] = useState<KeyResult | null>(null);
   const [checkInKR, setCheckInKR] = useState<KeyResult | null>(null);
@@ -52,6 +50,10 @@ export function ObjectiveDetailPage() {
   const [rollforwardCycleId, setRollforwardCycleId] = useState('');
   const [rollforwardLoading, setRollforwardLoading] = useState(false);
   const [rollforwardError, setRollforwardError] = useState<string | null>(null);
+  const [confirmActivate, setConfirmActivate] = useState(false);
+  const [activateLoading, setActivateLoading] = useState(false);
+  const [confirmRevertDraft, setConfirmRevertDraft] = useState(false);
+  const [revertDraftLoading, setRevertDraftLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [aiReview, setAiReview] = useState<AiReviewResult | null>(null);
   const [aiReviewLoading, setAiReviewLoading] = useState(false);
@@ -93,18 +95,10 @@ export function ObjectiveDetailPage() {
 
   const progress = calculateObjectiveProgress(objective.keyResults.map(kr => kr.progress));
   const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
-  const health = calculateHealthStatus(progress, selectedCycle, allCheckIns);
-
-  const handleEditObjective = async (input: UpdateObjectiveBody) => {
-    setActionError(null);
-    try {
-      await objectivesApi.updateObjective(objective.id, input as UpdateObjectiveBody);
-      await refetch();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to update objective');
-      throw err; // Re-throw so the form modal can show its own error state
-    }
-  };
+  const health = calculateHealthStatus(progress, selectedCycle, allCheckIns, {
+    targetDate: objective.targetDate,
+    objectiveStatus: objective.status,
+  });
 
   const handleAddKR = async (input: CreateKeyResultBody | UpdateKeyResultBody) => {
     setActionError(null);
@@ -205,6 +199,34 @@ export function ObjectiveDetailPage() {
     }
   };
 
+  const handleActivate = async () => {
+    setActivateLoading(true);
+    setActionError(null);
+    try {
+      await objectivesApi.updateObjective(objective.id, { status: 'active' });
+      setConfirmActivate(false);
+      await refetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to activate objective');
+    } finally {
+      setActivateLoading(false);
+    }
+  };
+
+  const handleRevertToDraft = async () => {
+    setRevertDraftLoading(true);
+    setActionError(null);
+    try {
+      await objectivesApi.updateObjective(objective.id, { status: 'draft' });
+      setConfirmRevertDraft(false);
+      await refetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to revert objective to draft');
+    } finally {
+      setRevertDraftLoading(false);
+    }
+  };
+
   // Target cycles for rollforward: non-closed cycles other than the current one
   const rollforwardTargetCycles = allCycles.filter(
     c => c.id !== objective.cycleId && c.status !== 'closed',
@@ -272,18 +294,41 @@ export function ObjectiveDetailPage() {
           {objective.description && (
             <p className="mt-3 text-sm text-slate-400">{objective.description}</p>
           )}
+          {objective.targetDate && (
+            <p className={`mt-2 text-xs ${health === 'late' ? 'text-rose-400 font-medium' : 'text-slate-500'}`}>
+              {health === 'late' ? 'Overdue — ' : ''}Due {formatDate(objective.targetDate)}
+            </p>
+          )}
         </div>
         <ProgressRing progress={progress} size={64} strokeWidth={5} />
       </div>
 
       {canEdit && (
         <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
-          >
-            Edit
-          </button>
+          {objective.status === 'draft' && (
+            <Link
+              to={`/objectives/${objective.id}/edit`}
+              className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors"
+            >
+              Edit
+            </Link>
+          )}
+          {objective.status === 'draft' && (
+            <button
+              onClick={() => setConfirmActivate(true)}
+              className="rounded-lg bg-emerald-600/20 px-3 py-1.5 text-sm font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors"
+            >
+              Activate
+            </button>
+          )}
+          {isAdmin && objective.status === 'active' && (
+            <button
+              onClick={() => setConfirmRevertDraft(true)}
+              className="rounded-lg bg-amber-600/20 px-3 py-1.5 text-sm font-medium text-amber-400 hover:bg-amber-600/30 transition-colors"
+            >
+              Revert to Draft
+            </button>
+          )}
           <button
             onClick={handleAiReview}
             disabled={aiReviewLoading}
@@ -410,26 +455,7 @@ export function ObjectiveDetailPage() {
         />
       </div>
 
-      <div className="mt-8">
-        <h3 className="text-lg font-semibold text-slate-100 mb-4">Check-in History</h3>
-        <div className="rounded-xl bg-surface-raised border border-slate-700 p-6">
-          <CheckInTimeline
-            checkIns={allCheckIns.sort(
-              (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-            )}
-          />
-        </div>
-      </div>
-
       {/* ── Modals ─────────────────────────────────────────── */}
-
-      <ObjectiveFormModal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        onSubmit={handleEditObjective}
-        objective={objective}
-        cycleId={activeCycle?.id ?? objective.cycleId}
-      />
 
       <KeyResultFormModal
         isOpen={showAddKR}
@@ -518,6 +544,28 @@ export function ObjectiveDetailPage() {
         confirmLabel="Delete"
         variant="danger"
         isLoading={deleteLoading}
+      />
+
+      {/* Confirm activate objective */}
+      <ConfirmModal
+        isOpen={confirmActivate}
+        onClose={() => setConfirmActivate(false)}
+        onConfirm={handleActivate}
+        title="Activate Objective"
+        message="Activating will lock this objective for editing. You can still manage key results and record check-ins. Continue?"
+        confirmLabel="Activate"
+        isLoading={activateLoading}
+      />
+
+      {/* Admin: Confirm revert to draft */}
+      <ConfirmModal
+        isOpen={confirmRevertDraft}
+        onClose={() => setConfirmRevertDraft(false)}
+        onConfirm={handleRevertToDraft}
+        title="Revert to Draft"
+        message="This will unlock the objective for editing. Progress on key results will be preserved."
+        confirmLabel="Revert to Draft"
+        isLoading={revertDraftLoading}
       />
 
       {/* Roll forward modal */}

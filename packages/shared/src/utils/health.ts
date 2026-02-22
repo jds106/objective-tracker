@@ -1,13 +1,32 @@
 import type { CheckIn } from '../types/check-in.js';
 import type { Cycle } from '../types/cycle.js';
 
-export type HealthStatus = 'on_track' | 'at_risk' | 'behind' | 'not_started';
+export type HealthStatus = 'on_track' | 'at_risk' | 'behind' | 'not_started' | 'late';
+
+export interface HealthOptions {
+  targetDate?: string;
+  objectiveStatus?: string;
+}
 
 export function calculateHealthStatus(
   progress: number,
   cycle: Cycle | null,
   checkIns: CheckIn[],
+  options?: HealthOptions,
 ): HealthStatus {
+  // Late check: active/draft, incomplete, past target date
+  if (
+    options?.targetDate &&
+    options.objectiveStatus &&
+    (options.objectiveStatus === 'draft' || options.objectiveStatus === 'active') &&
+    progress < 100
+  ) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const target = new Date(options.targetDate + 'T00:00:00');
+    if (now > target) return 'late';
+  }
+
   if (progress === 0 && checkIns.length === 0) return 'not_started';
 
   if (!cycle) {
@@ -42,6 +61,8 @@ export function healthStatusColour(status: HealthStatus): string {
       return 'amber';
     case 'behind':
       return 'red';
+    case 'late':
+      return 'rose';
     case 'not_started':
       return 'slate';
   }
@@ -55,6 +76,8 @@ export function healthStatusLabel(status: HealthStatus): string {
       return 'At Risk';
     case 'behind':
       return 'Behind';
+    case 'late':
+      return 'Late';
     case 'not_started':
       return 'Not Started';
   }

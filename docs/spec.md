@@ -88,7 +88,10 @@ Admin users:
 - **Visibility**: Admins can see **all users** and **all objectives** regardless of reporting chain.
 - **Editing**: Admins can edit **any user's objectives** and modify user records (role, department, manager assignment).
 - **User management**: Admins can list, update, and delete users. An admin cannot delete themselves.
-- **Company objectives**: Only admins can create root-level company objectives (objectives with no owner in the org hierarchy, representing top-level strategic goals).
+- **No personal objectives**: The admin account is a system operator, not a person in the org hierarchy. Admins cannot create objectives for themselves — the "Create Objective" button is hidden on the admin's dashboard.
+- **Company objectives**: Only admins can create root-level company objectives (objectives with no owner in the org hierarchy, representing top-level strategic goals) via the Admin → Objectives panel. Created through `POST /api/admin/objectives/company`.
+- **Objectives for users**: Admins can create objectives on behalf of any user via `POST /api/admin/objectives/for-user` (Admin → Objectives panel → "Create for User" button). The admin selects a target user from a dropdown and provides the title, description, and target date (via the `TargetDatePicker`).
+- **Revert to Draft**: Only admins can transition an active objective back to `draft` status, re-enabling editing of title, description, and parent links.
 - **Password resets**: Admins can trigger a password reset for any user, generating a temporary password.
 - **Cycle management**: Only admins can create and manage objective cycles.
 
@@ -137,6 +140,8 @@ interface Objective {
   parentKeyResultId: string | null; // Links to a KR in the parent's objective (null if unlinked)
   parentObjectiveId: string | null; // The objective that contains the parent KR
   status: ObjectiveStatus;
+  targetDateType: TargetDateType;  // How the target date was chosen
+  targetDate: string;              // ISO 8601 date, e.g. "2026-03-31"
   keyResults: KeyResult[];
   createdAt: string;
   updatedAt: string;
@@ -144,7 +149,19 @@ interface Objective {
 }
 
 type ObjectiveStatus = 'draft' | 'active' | 'completed' | 'cancelled' | 'rolled_forward';
+type TargetDateType = 'quarterly' | 'annual' | 'arbitrary';
 ```
+
+**Target date types:**
+- `quarterly` — end date of a cycle quarter (e.g. Q1 2026 → 2026-03-31)
+- `annual` — end of a calendar year (e.g. 2026-12-31)
+- `arbitrary` — any user-chosen date via date picker
+
+**Status transition rules:**
+- `draft` → `active` (any user with edit permission)
+- `active` → `completed` | `cancelled` | `rolled_forward` (any user with edit permission)
+- `active` → `draft` (**admin only** — allows re-editing a locked objective)
+- Terminal states (`completed`, `cancelled`, `rolled_forward`) have no outbound transitions
 
 #### Key Result
 
@@ -325,27 +342,57 @@ The main layout has a collapsible sidebar (hidden on mobile, toggled via hamburg
 
 The user's personal dashboard showing:
 
-- **My Objectives**: Cards for each active objective with progress rings/bars
+- **My Objectives**: Cards for each draft/active objective with progress rings/bars and target dates. A sort dropdown (right-aligned) allows sorting by target date (default, ascending), completion %, name, or last updated.
+- **Historical Objectives**: A collapsible `<details>` section below the main grid showing completed, cancelled, and rolled-forward objectives in a table (title link, status badge, target date, progress %, last updated). Collapsed by default.
 - **Overall Completion**: An aggregated progress metric across all objectives
 - **Upcoming Check-ins**: When the next check-in is due
 - **Recent Activity**: Latest check-ins with source icons (🌐 Web, 💬 Slack, 🤖 MCP), "View all" expansion showing up to 20 items with objective attribution
 - **Stale KR Nudges**: Time-based nudges for key results that haven't received a check-in in 14+ days. Sorted by staleness (most stale first), limited to the top 5 items. Each nudge links to the parent objective's detail page. Hidden when viewing a historical cycle.
 - **AI Nudges** (when AI is enabled): AI-generated suggestions for improving objective quality or alignment
+- **Create Objective**: A "Create Objective" button/card navigates to `/objectives/new` (full-page create form). Hidden for admins, historical cycles, or when no active cycle exists.
 
-#### 5.3.2 Objective Detail
+#### 5.3.2 Create Objective Page (`/objectives/new`)
+
+A full-page form for creating a new objective (replaces the previous modal-based flow):
+
+- **Guards**: Redirects to `/dashboard` if there is no active cycle, if viewing a historical cycle, or if the user is an admin (admins create objectives via the Admin panel).
+- **Layout**: Single-column, centred (`max-w-2xl`), with a back link to the dashboard.
+- **Form fields**: Title (required) and description (optional).
+- **Target date picker** (`TargetDatePicker`): A segmented control (Quarterly | Annual | Custom) that controls the target date input. Quarterly shows a cycle-quarter dropdown, Annual shows a year dropdown, Custom shows a native date picker. Defaults to the current quarter's end date. If a parent is selected and the child's target date is later than the parent's, an amber warning is displayed.
+- **Parent objective picker**: A rich, card-based component for optionally linking the new objective to a parent. Cards display the owner's avatar, name, job title, a progress ring, status badge, and key result count. Supports search by objective title or owner name with debounced filtering. When a parent is selected, its key results are shown as selectable pills for optional KR-level linking. If the child's `targetDate` exceeds the parent's, an amber warning banner appears.
+- **On create**: Navigates to the new objective's detail page (`/objectives/:id`).
+
+#### 5.3.3 Edit Objective Page (`/objectives/:id/edit`)
+
+A full-page editor for modifying an existing objective:
+
+- **Guards**: Redirects to the detail page if the user cannot edit or if the objective is not in `draft` status (unless the user is an admin).
+- **Layout**: Two-column on large screens (objective details + parent picker on the left, key results on the right), stacks vertically on mobile.
+- **Left column**: Title, description (editable), target date picker (same `TargetDatePicker` as the create page), and the parent objective picker (same rich card UI as the create page). A "Save Changes" button persists objective-level field changes including target date.
+- **Right column**: Key result management — the full `KeyResultList` with add, edit, delete, and check-in capabilities. KR operations use modals (small, focused) and save independently of the objective-level save.
+- **Header**: Shows status badge, health badge, and progress ring.
+
+#### 5.3.4 Objective Detail
 
 A full view of a single objective:
 
 - **Back navigation**: A breadcrumb bar showing Back button → Dashboard → objective title
-- Title, description, status
+- Title, description, status, target date (displayed as "Due YYYY-MM-DD"; if health is `late`, shows "Overdue — Due YYYY-MM-DD" in rose colour)
 - Parent linkage (with a visual breadcrumb showing the cascade path up to the company objective)
 - Key results with detailed progress visualisation appropriate to type
 - Check-in history as a timeline
 - Child objectives linked to this objective's KRs (if any — for managers)
 - **Delete protection**: Deleting an objective that has linked child objectives shows a 409 conflict dialog listing the children, with an option to force-delete (which unlinks children first)
 - AI assistant sidebar for editing/improving the objective
+- **Edit button**: When the objective is in `draft` status and the user can edit, an "Edit" link navigates to `/objectives/:id/edit` (the full-page editor).
 
-#### 5.3.3 Cascade Tree View (Primary Navigation)
+**Status management & edit locking:**
+
+- **Activate button**: Visible when the user can edit and the objective is in `draft` status. Clicking shows a confirmation modal ("Activating will lock this objective for editing. You can still manage key results and record check-ins. Continue?"). On confirm, transitions status to `active`.
+- **Edit locking**: Once an objective is `active`, the Edit link is hidden. Title, description, and parent links cannot be modified. Key result management (add, edit, delete KRs), check-ins, AI review, and roll forward remain available — tracking progress is the purpose of active objectives.
+- **Revert to Draft (admin only)**: Visible when the current user is an admin and the objective is `active`. Shows a confirmation modal ("This will unlock the objective for editing. Progress on key results will be preserved."). On confirm, transitions status back to `draft`, re-enabling the Edit link. This is an admin-only operation; non-admin users cannot revert active objectives.
+
+#### 5.3.5 Cascade Tree View (Primary Navigation)
 
 A top-down hierarchical D3-powered visualisation with pan and zoom:
 
@@ -360,7 +407,7 @@ A top-down hierarchical D3-powered visualisation with pan and zoom:
 - SVG-based rendering with cubic bezier link paths between parent and child nodes
 - Animated expand/collapse via Framer Motion `AnimatePresence`
 
-#### 5.3.4 Network Graph View (Exploration)
+#### 5.3.6 Network Graph View (Exploration)
 
 A force-directed graph showing objective connections:
 
@@ -372,7 +419,7 @@ A force-directed graph showing objective connections:
 - Orphaned objectives (unlinked) float at the periphery — visually highlighting alignment gaps
 - Toggle to highlight cross-team connections
 
-#### 5.3.5 Team View (Manager)
+#### 5.3.7 Team View (Manager)
 
 For managers, a view of their direct reports' objectives. Only visible in the sidebar navigation if the current user has direct reports.
 
@@ -384,18 +431,18 @@ For managers, a view of their direct reports' objectives. Only visible in the si
   - "No check-ins" (red) — objectives exist but no check-ins recorded
 - Each report card is expandable to show individual objectives with title, status badge, health badge, and progress bar, linking to objective detail
 
-#### 5.3.6 Admin Panel
+#### 5.3.8 Admin Panel
 
 Accessible only to users with `role: 'admin'` (see §2.3). The admin panel provides:
 
 - **User management**: List all users (paginated, 25 per page) with search, update role/department/manager, delete users, trigger password resets
 - **Company objectives**: Create and manage root-level company objectives that sit at the top of the cascade
-- **User objectives**: Paginated list (25 per page) with search by title, owner, or status
+- **User objectives**: Paginated list (25 per page) with search by title, owner, or status. Admins can create objectives on behalf of any user via "Create for User" (selects target user from dropdown)
 - **Cycle management**: Create/edit annual cycles and quarters
 - **Org structure management**: Manual adjustments to reporting lines, interactive tree view
 - **Workday CSV import**: Upload and map columns to build the org tree
 
-#### 5.3.7 Profile Page
+#### 5.3.9 Profile Page
 
 A user account management page at `/profile`:
 
@@ -403,7 +450,7 @@ A user account management page at `/profile`:
 - **Profile details form** — editable display name, job title, and department fields. Changes are reflected immediately across the app (sidebar, cascade tree, team view).
 - **Password change** — current password verification followed by new password + confirmation.
 
-#### 5.3.8 AI Assistant Panel
+#### 5.3.10 AI Assistant Panel
 
 A slide-out panel accessible from any objective editing context:
 
@@ -414,7 +461,7 @@ A slide-out panel accessible from any objective editing context:
 - Helps choose the right KR measurement type
 - Provides best-practice examples relevant to the user's role and domain
 
-#### 5.3.9 Bulk Check-in Page
+#### 5.3.11 Bulk Check-in Page
 
 A dedicated page at `/check-in` that allows users to update all their key results in a single flow:
 
@@ -651,13 +698,13 @@ objective-tracker/
 
 **Objectives**
 - `GET /api/objectives` — List current user's objectives (filterable by cycle)
-- `GET /api/objectives/company` — List company-level objectives (visible to all authenticated users)
+- `GET /api/objectives/company` — List company-level objectives (visible to all authenticated users). Returns both `ownerId='company'` objectives and objectives owned by admin users, since both serve as top-level organisational goals.
 - `POST /api/objectives` — Create objective
 - `GET /api/objectives/:id` — Get objective detail (includes `canEdit` boolean indicating whether the requester can edit this objective)
 - `PUT /api/objectives/:id` — Update objective
 - `DELETE /api/objectives/:id` — Delete objective (draft only). Returns 409 with `linkedChildren` array if the objective has linked child objectives. Pass `?force=true` to unlink children and proceed with deletion.
 - `GET /api/objectives/:id/cascade` — Get cascade path for objective (visibility-filtered: restricted objectives replaced with placeholders)
-- `POST /api/objectives/:id/rollforward` — Roll forward an active objective to a new cycle (copies objective + KRs with reset progress, marks original as `rolled_forward`)
+- `POST /api/objectives/:id/rollforward` — Roll forward an active objective to a new cycle (copies objective + KRs with reset progress, marks original as `rolled_forward`). Target date is recalculated: quarterly → same-index quarter in target cycle, annual → target cycle year, arbitrary → shifted by cycle start date difference.
 
 **Key Results**
 - `POST /api/objectives/:id/key-results` — Add KR to objective
@@ -686,7 +733,8 @@ objective-tracker/
 - `PUT /api/admin/users/:id/password` — Set a specific password for a user
 - `POST /api/admin/users/import` — Bulk import users from CSV data. Accepts `{ rows: [{ email, displayName, jobTitle, department?, managerEmail?, level? }] }`. Returns per-row status (created/skipped/error) and summary counts. Generates random initial passwords.
 - `GET /api/admin/objectives` — List all objectives org-wide (resolves owner names when user list is available)
-- `POST /api/admin/objectives/company` — Create a root-level company objective
+- `POST /api/admin/objectives/company` — Create a root-level company objective. Accepts `{ cycleId, title, description?, targetDateType?, targetDate }`.
+- `POST /api/admin/objectives/for-user` — Create an objective on behalf of a specific user. Accepts `{ ownerId, cycleId, title, description?, parentObjectiveId?, parentKeyResultId?, targetDateType?, targetDate }`. Validates the target user exists.
 - `POST /api/admin/cycles` — Create a new objective cycle (with quarters)
 - `PUT /api/admin/cycles/:id` — Update cycle (name, dates, status). Status transitions are validated: planning→active→review→closed. Only one active cycle allowed at a time.
 
@@ -712,10 +760,11 @@ All KR types are normalised to 0–100 for aggregation:
 
 ### 11.3 Health Status
 
-Based on progress vs. expected progress (linear interpolation through the cycle):
+Based on progress vs. expected progress (linear interpolation through the cycle). The `late` status takes highest priority and is checked first.
 
 | Status | Condition |
 |--------|-----------|
+| 🔴 Late | Objective is draft/active, progress < 100, and today is past the target date |
 | 🟢 On Track | Progress ≥ expected - 10% |
 | 🟡 At Risk | Progress ≥ expected - 25% |
 | 🔴 Behind | Progress < expected - 25% |

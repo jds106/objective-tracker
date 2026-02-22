@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { User, Objective, Cycle, CycleStatus, UpdateObjectiveBody } from '@objective-tracker/shared';
-import { formatDate } from '@objective-tracker/shared';
+import type { User, Objective, Cycle, CycleStatus, UpdateObjectiveBody, TargetDateType } from '@objective-tracker/shared';
+import { formatDate, getCurrentQuarterEndDate } from '@objective-tracker/shared';
 import { useAuth } from '../contexts/auth.context.js';
 import { useCycle } from '../contexts/cycle.context.js';
 import { Modal } from '../components/Modal.js';
 import { LoadingSpinner } from '../components/LoadingSpinner.js';
 import { ProgressRing } from '../components/ProgressRing.js';
 import { PageTransition } from '../components/PageTransition.js';
+import { TargetDatePicker } from '../components/objectives/TargetDatePicker.js';
 import { useDebounce } from '../hooks/useDebounce.js';
 import { getErrorMessage } from '../utils/error.js';
 import * as adminApi from '../services/admin.api.js';
@@ -881,6 +882,19 @@ function ObjectivesTab() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [creating, setCreating] = useState(false);
+    const [companyTargetDateType, setCompanyTargetDateType] = useState<TargetDateType>('quarterly');
+    const [companyTargetDate, setCompanyTargetDate] = useState(() =>
+        activeCycle ? getCurrentQuarterEndDate(activeCycle) : new Date().toISOString().split('T')[0]!,
+    );
+    const [showCreateForUser, setShowCreateForUser] = useState(false);
+    const [forUserOwnerId, setForUserOwnerId] = useState('');
+    const [forUserTitle, setForUserTitle] = useState('');
+    const [forUserDescription, setForUserDescription] = useState('');
+    const [forUserTargetDateType, setForUserTargetDateType] = useState<TargetDateType>('quarterly');
+    const [forUserTargetDate, setForUserTargetDate] = useState(() =>
+        activeCycle ? getCurrentQuarterEndDate(activeCycle) : new Date().toISOString().split('T')[0]!,
+    );
+    const [creatingForUser, setCreatingForUser] = useState(false);
     const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
     const [deleteObjectiveConfirm, setDeleteObjectiveConfirm] = useState<Objective | null>(null);
 
@@ -917,6 +931,8 @@ function ObjectivesTab() {
                 cycleId: activeCycle.id,
                 title,
                 description,
+                targetDateType: companyTargetDateType,
+                targetDate: companyTargetDate,
             });
             setObjectives(prev => [data, ...prev]);
             setTitle('');
@@ -926,6 +942,31 @@ function ObjectivesTab() {
             setError(getErrorMessage(err, 'Failed to create objective'));
         } finally {
             setCreating(false);
+        }
+    };
+
+    const handleCreateForUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!activeCycle || !forUserOwnerId) return;
+        setCreatingForUser(true);
+        try {
+            const { data } = await adminApi.createObjectiveForUser({
+                ownerId: forUserOwnerId,
+                cycleId: activeCycle.id,
+                title: forUserTitle,
+                description: forUserDescription,
+                targetDateType: forUserTargetDateType,
+                targetDate: forUserTargetDate,
+            });
+            setObjectives(prev => [...prev, data]);
+            setForUserOwnerId('');
+            setForUserTitle('');
+            setForUserDescription('');
+            setShowCreateForUser(false);
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to create objective for user'));
+        } finally {
+            setCreatingForUser(false);
         }
     };
 
@@ -1034,13 +1075,23 @@ function ObjectivesTab() {
                         All User Objectives
                         <span className="text-sm font-normal text-slate-500 ml-2">({filteredUserObjectives.length})</span>
                     </h3>
-                    <input
-                        type="text"
-                        placeholder="Search objectives…"
-                        value={objSearch}
-                        onChange={e => setObjSearch(e.target.value)}
-                        className="rounded-lg bg-surface border border-slate-700 px-3 py-1.5 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none w-64"
-                    />
+                    <div className="flex items-center gap-3">
+                        {activeCycle && (
+                            <button
+                                onClick={() => setShowCreateForUser(true)}
+                                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
+                            >
+                                + Create for User
+                            </button>
+                        )}
+                        <input
+                            type="text"
+                            placeholder="Search objectives…"
+                            value={objSearch}
+                            onChange={e => setObjSearch(e.target.value)}
+                            className="rounded-lg bg-surface border border-slate-700 px-3 py-1.5 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none w-64"
+                        />
+                    </div>
                 </div>
 
                 {paginatedObjectives.length === 0 ? (
@@ -1116,6 +1167,18 @@ function ObjectivesTab() {
                             placeholder="Brief description of this company-level goal..."
                         />
                     </div>
+                    {activeCycle && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Target Date</label>
+                            <TargetDatePicker
+                                targetDateType={companyTargetDateType}
+                                targetDate={companyTargetDate}
+                                onTypeChange={setCompanyTargetDateType}
+                                onDateChange={setCompanyTargetDate}
+                                cycle={activeCycle}
+                            />
+                        </div>
+                    )}
                     <div className="flex justify-end gap-3 pt-2">
                         <button
                             type="button"
@@ -1130,6 +1193,82 @@ function ObjectivesTab() {
                             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
                         >
                             {creating ? 'Creating…' : 'Create Objective'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* Create objective for user modal */}
+            <Modal isOpen={showCreateForUser} onClose={() => setShowCreateForUser(false)} title="Create Objective for User">
+                <form onSubmit={handleCreateForUser} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">User</label>
+                        <select
+                            value={forUserOwnerId}
+                            onChange={e => setForUserOwnerId(e.target.value)}
+                            required
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        >
+                            <option value="">Select a user…</option>
+                            {users
+                                .filter(u => u.role !== 'admin')
+                                .sort((a, b) => a.displayName.localeCompare(b.displayName))
+                                .map(u => (
+                                    <option key={u.id} value={u.id}>
+                                        {u.displayName} ({u.email})
+                                    </option>
+                                ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Title</label>
+                        <input
+                            type="text"
+                            value={forUserTitle}
+                            onChange={e => setForUserTitle(e.target.value)}
+                            required
+                            maxLength={200}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            placeholder="e.g. Improve deployment pipeline reliability"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                        <textarea
+                            value={forUserDescription}
+                            onChange={e => setForUserDescription(e.target.value)}
+                            rows={3}
+                            maxLength={2000}
+                            className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none resize-none"
+                            placeholder="Brief description of what this objective aims to achieve..."
+                        />
+                    </div>
+                    {activeCycle && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Target Date</label>
+                            <TargetDatePicker
+                                targetDateType={forUserTargetDateType}
+                                targetDate={forUserTargetDate}
+                                onTypeChange={setForUserTargetDateType}
+                                onDateChange={setForUserTargetDate}
+                                cycle={activeCycle}
+                            />
+                        </div>
+                    )}
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setShowCreateForUser(false)}
+                            className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={creatingForUser || !forUserTitle.trim() || !forUserOwnerId}
+                            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                        >
+                            {creatingForUser ? 'Creating…' : 'Create Objective'}
                         </button>
                     </div>
                 </form>

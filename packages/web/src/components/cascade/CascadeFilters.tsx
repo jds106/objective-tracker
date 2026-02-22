@@ -24,6 +24,7 @@ const healthOptions = [
   { value: 'on_track', label: 'On Track' },
   { value: 'at_risk', label: 'At Risk' },
   { value: 'behind', label: 'Behind' },
+  { value: 'late', label: 'Late' },
   { value: 'not_started', label: 'Not Started' },
 ];
 

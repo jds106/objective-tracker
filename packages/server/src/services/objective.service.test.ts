@@ -20,6 +20,8 @@ function makeObjective(overrides: Partial<Objective> & { id: string; ownerId: st
     parentKeyResultId: null,
     parentObjectiveId: null,
     status: 'draft',
+    targetDateType: 'quarterly',
+    targetDate: '2025-12-31',
     keyResults: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -145,6 +147,8 @@ describe('ObjectiveService', () => {
         description: 'Description',
         parentKeyResultId: null,
         parentObjectiveId: null,
+        targetDateType: 'quarterly',
+        targetDate: '2025-12-31',
       });
       expect(created.title).toBe('New Objective');
       expect(created.ownerId).toBe('user-1');
@@ -158,6 +162,8 @@ describe('ObjectiveService', () => {
           description: '',
           parentKeyResultId: null,
           parentObjectiveId: null,
+          targetDateType: 'quarterly',
+          targetDate: '2025-12-31',
         }),
       ).rejects.toThrow(NotFoundError);
     });
@@ -170,6 +176,8 @@ describe('ObjectiveService', () => {
           description: '',
           parentKeyResultId: null,
           parentObjectiveId: null,
+          targetDateType: 'quarterly',
+          targetDate: '2025-12-31',
         }),
       ).rejects.toThrow(ValidationError);
     });
