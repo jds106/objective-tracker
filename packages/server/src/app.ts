@@ -23,6 +23,7 @@ import {
   AiService,
 } from './services/index.js';
 import { ConsoleNotificationService } from './services/index.js';
+import { AnthropicLlmClient, OllamaLlmClient } from './services/llm-client.js';
 import { createRoutes } from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.middleware.js';
 import { logger } from './logger.js';
@@ -91,15 +92,19 @@ export async function createApp(config: Config): Promise<Express> {
   );
   await passwordResetService.load();
 
-  // Initialise AI service (optional — only if API key is configured)
-  const aiService = config.ANTHROPIC_API_KEY
-    ? new AiService(config.ANTHROPIC_API_KEY, config.ANTHROPIC_MODEL, objectiveRepo, userRepo)
-    : null;
+  // Initialise AI service (optional)
+  let aiService: AiService | null = null;
 
-  if (aiService) {
-    logger.info('AI features enabled (Anthropic API key configured)');
+  if (config.AI_PROVIDER === 'ollama') {
+    const llmClient = new OllamaLlmClient(config.OLLAMA_BASE_URL, config.OLLAMA_MODEL);
+    aiService = new AiService(llmClient, objectiveRepo, userRepo);
+    logger.info({ provider: 'ollama', model: config.OLLAMA_MODEL, baseUrl: config.OLLAMA_BASE_URL }, 'AI features enabled (Ollama)');
+  } else if (config.ANTHROPIC_API_KEY) {
+    const llmClient = new AnthropicLlmClient(config.ANTHROPIC_API_KEY, config.ANTHROPIC_MODEL);
+    aiService = new AiService(llmClient, objectiveRepo, userRepo);
+    logger.info({ provider: 'anthropic', model: config.ANTHROPIC_MODEL }, 'AI features enabled (Anthropic)');
   } else {
-    logger.info('AI features disabled (no ANTHROPIC_API_KEY set)');
+    logger.info('AI features disabled (no ANTHROPIC_API_KEY set and AI_PROVIDER is not ollama)');
   }
 
   // Mount routes

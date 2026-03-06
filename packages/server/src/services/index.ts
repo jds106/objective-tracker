@@ -9,3 +9,5 @@ export type { CascadeNode } from './cascade.service.js';
 export { ConsoleNotificationService } from './notification.service.js';
 export type { NotificationService } from './notification.service.js';
 export { AiService } from './ai.service.js';
+export type { LlmClient } from './llm-client.js';
+export { AnthropicLlmClient, OllamaLlmClient } from './llm-client.js';

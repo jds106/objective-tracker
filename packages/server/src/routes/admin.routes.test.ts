@@ -15,7 +15,10 @@ function testConfig(dataDir: string): Config {
         JWT_EXPIRY: '1h',
         FRONTEND_URL: 'http://localhost:5173',
         BCRYPT_SALT_ROUNDS: 4,
+    AI_PROVIDER: 'anthropic' as const,
     ANTHROPIC_MODEL: 'claude-sonnet-4-20250514',
+    OLLAMA_BASE_URL: 'http://localhost:11434',
+    OLLAMA_MODEL: 'deepseek-r1:14b-qwen-distill-q8_0',
     };
 }
 

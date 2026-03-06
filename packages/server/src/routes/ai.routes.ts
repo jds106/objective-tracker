@@ -12,7 +12,7 @@ export function createAiRoutes(deps: RouteDependencies): Router {
   // Bail out early if AI is not configured
   router.use((_req, res, next) => {
     if (!deps.aiService) {
-      res.status(503).json({ error: 'AI features are not configured. Set ANTHROPIC_API_KEY to enable them.' });
+      res.status(503).json({ error: 'AI features are not configured. Set AI_PROVIDER=ollama or set ANTHROPIC_API_KEY to enable them.' });
       return;
     }
     next();
@@ -36,6 +36,22 @@ export function createAiRoutes(deps: RouteDependencies): Router {
       }
 
       const result = await deps.aiService!.reviewObjective(objectiveId);
+      res.json({ data: result });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** POST /api/ai/review-draft — Review a draft objective before saving */
+  router.post('/review-draft', async (req, res, next) => {
+    try {
+      const { title, description } = req.body;
+      if (!title || typeof title !== 'string') {
+        res.status(400).json({ error: 'title is required' });
+        return;
+      }
+
+      const result = await deps.aiService!.reviewDraft(title, description);
       res.json({ data: result });
     } catch (err) {
       next(err);

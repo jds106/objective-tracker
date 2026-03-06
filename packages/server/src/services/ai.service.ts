@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import type {
   AiReviewResult,
   AiSuggestedObjective,
@@ -8,20 +7,14 @@ import type {
   UserRepository,
 } from '@objective-tracker/shared';
 import { NotFoundError, ValidationError } from '@objective-tracker/shared';
+import type { LlmClient } from './llm-client.js';
 
 export class AiService {
-  private readonly client: Anthropic;
-  private readonly model: string;
-
   constructor(
-    apiKey: string,
-    model: string,
+    private readonly llmClient: LlmClient,
     private readonly objectiveRepo: ObjectiveRepository,
     private readonly userRepo: UserRepository,
-  ) {
-    this.client = new Anthropic({ apiKey });
-    this.model = model;
-  }
+  ) {}
 
   /**
    * Review an objective for quality, returning a score, suggestions, and strengths.
@@ -31,7 +24,7 @@ export class AiService {
     if (!objective) throw new NotFoundError('Objective not found');
 
     const prompt = this.buildReviewPrompt(objective);
-    const content = await this.callClaude(prompt);
+    const content = await this.callLlm(prompt);
     return this.parseJson<AiReviewResult>(content, 'review');
   }
 
@@ -43,7 +36,7 @@ export class AiService {
     if (!parent) throw new NotFoundError('Parent objective not found');
 
     const prompt = this.buildSuggestPrompt(parent, context);
-    const content = await this.callClaude(prompt);
+    const content = await this.callLlm(prompt);
     return this.parseJson<AiSuggestedObjective[]>(content, 'suggest');
   }
 
@@ -63,30 +56,31 @@ export class AiService {
     }
 
     const prompt = this.buildSummarisePrompt(objectives, userName);
-    const content = await this.callClaude(prompt);
+    const content = await this.callLlm(prompt);
     return this.parseJson<AiSummaryResult>(content, 'summarise');
+  }
+
+  /**
+   * Review a draft objective (title + description) before it is saved.
+   */
+  async reviewDraft(title: string, description?: string): Promise<AiReviewResult> {
+    const prompt = this.buildDraftReviewPrompt(title, description);
+    const content = await this.callLlm(prompt);
+    return this.parseJson<AiReviewResult>(content, 'review');
   }
 
   // ── Private helpers ───────────────────────────────────────
 
-  private async callClaude(prompt: string): Promise<string> {
-    const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const textBlock = response.content.find(b => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
-      throw new ValidationError('AI returned an empty response');
-    }
-    return textBlock.text;
+  private async callLlm(prompt: string): Promise<string> {
+    return this.llmClient.complete(prompt);
   }
 
   private parseJson<T>(content: string, context: string): T {
+    // Strip <think>...</think> blocks (deepseek-r1 reasoning)
+    let cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     // Extract JSON from markdown code blocks if present
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
+    const jsonMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const jsonStr = jsonMatch ? jsonMatch[1].trim() : cleaned;
     try {
       return JSON.parse(jsonStr) as T;
     } catch {
@@ -118,6 +112,37 @@ Evaluate this objective against these criteria:
 3. **Ambition** — Is it aspirational enough without being unrealistic?
 4. **Specificity** — Does it avoid vague language like "improve", "better", "more"?
 5. **Alignment** — Does it focus on outcomes rather than outputs?
+
+Respond with ONLY a JSON object (no markdown, no explanation outside JSON) matching this exact structure:
+{
+  "score": <number 1-10>,
+  "summary": "<one sentence summary of quality>",
+  "suggestions": [
+    {
+      "category": "<clarity|measurability|ambition|alignment|specificity>",
+      "message": "<specific, actionable suggestion>",
+      "rewrite": "<optional improved version>"
+    }
+  ],
+  "strengths": ["<what's good about this objective>"]
+}`;
+  }
+
+  private buildDraftReviewPrompt(title: string, description?: string): string {
+    return `You are an expert OKR coach reviewing a draft objective for quality. Be constructive, specific, and opinionated — coach the user towards better objectives.
+
+Draft Objective:
+- Title: "${title}"
+- Description: "${description || '(none provided)'}"
+- Key Results: (not yet defined — this is a draft)
+
+Evaluate this objective against these criteria:
+1. **Clarity** — Is the objective clearly worded and unambiguous?
+2. **Ambition** — Is it aspirational enough without being unrealistic?
+3. **Specificity** — Does it avoid vague language like "improve", "better", "more"?
+4. **Alignment** — Does it focus on outcomes rather than outputs?
+
+Since this is a draft with no key results yet, focus your suggestions on improving the title and description. Suggest what good key results might look like.
 
 Respond with ONLY a JSON object (no markdown, no explanation outside JSON) matching this exact structure:
 {

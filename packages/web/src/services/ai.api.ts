@@ -10,6 +10,10 @@ export function reviewObjective(objectiveId: string): Promise<ApiResponse<AiRevi
   return apiClient.post('/ai/review', { objectiveId });
 }
 
+export function reviewDraft(title: string, description?: string): Promise<ApiResponse<AiReviewResult>> {
+  return apiClient.post('/ai/review-draft', { title, description });
+}
+
 export function suggestObjectives(
   parentObjectiveId: string,
   context?: string,
