@@ -25,10 +25,13 @@ interface FlatEntry {
   groupLabel: string;
 }
 
-/** Flatten the cascade tree into a list of linkable objectives, grouped by owner. */
+/** Flatten the cascade tree into a list of linkable objectives, grouped by owner.
+ *  Only objectives from users at a higher level (lower number) are linkable —
+ *  objectives cascade downward, so a parent must come from above in the hierarchy. */
 function flattenTree(
   nodes: CascadeNode[],
   currentUserId: string | undefined,
+  currentUserLevel: number | undefined,
   excludeObjectiveId: string | undefined,
 ): FlatEntry[] {
   const entries: FlatEntry[] = [];
@@ -38,7 +41,8 @@ function flattenTree(
     if (
       LINKABLE_STATUSES.has(obj.status) &&
       node.owner.id !== currentUserId &&
-      obj.id !== excludeObjectiveId
+      obj.id !== excludeObjectiveId &&
+      (currentUserLevel === undefined || node.owner.level < currentUserLevel)
     ) {
       const groupLabel = node.owner.level === 0
         ? 'Company Objectives'
@@ -71,8 +75,8 @@ export function ParentObjectivePicker({
   const debouncedQuery = useDebounce(query, 200);
 
   const allEntries = useMemo(
-    () => flattenTree(tree, user?.id, excludeObjectiveId),
-    [tree, user?.id, excludeObjectiveId],
+    () => flattenTree(tree, user?.id, user?.level, excludeObjectiveId),
+    [tree, user?.id, user?.level, excludeObjectiveId],
   );
 
   const filtered = useMemo(() => {
