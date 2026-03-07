@@ -79,6 +79,7 @@ export interface CreateKeyResultInput {
 
 export interface UpdateKeyResultInput {
   title?: string;
+  type?: KeyResultType;
   config?: KeyResultConfig;
 }
 

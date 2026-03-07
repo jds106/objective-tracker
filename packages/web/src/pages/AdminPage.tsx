@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import type { User, Objective, Cycle, CycleStatus, UpdateObjectiveBody, TargetDateType } from '@objective-tracker/shared';
 import { formatDate, getCurrentQuarterEndDate } from '@objective-tracker/shared';
 import { useAuth } from '../contexts/auth.context.js';
@@ -38,8 +39,8 @@ export function AdminPage() {
                         key={t}
                         onClick={() => setTab(t)}
                         className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${tab === t
-                                ? 'bg-surface-raised text-indigo-400 border border-slate-700 border-b-transparent -mb-px'
-                                : 'text-slate-400 hover:text-slate-200'
+                            ? 'bg-surface-raised text-indigo-400 border border-slate-700 border-b-transparent -mb-px'
+                            : 'text-slate-400 hover:text-slate-200'
                             }`}
                     >
                         {TAB_LABELS[t]}
@@ -222,8 +223,8 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
                                             disabled={actionLoading === `role-${user.id}` || user.id === currentUserId}
                                             title={user.id === currentUserId ? 'Cannot change your own role' : `Click to change role to ${user.role === 'admin' ? 'standard' : 'admin'}`}
                                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${user.id === currentUserId
-                                                    ? 'cursor-not-allowed'
-                                                    : 'cursor-pointer'
+                                                ? 'cursor-not-allowed'
+                                                : 'cursor-pointer'
                                                 } ${user.role === 'admin'
                                                     ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
                                                     : 'bg-slate-500/15 text-slate-400 hover:bg-slate-500/25'
@@ -312,8 +313,8 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
                                 key={page}
                                 onClick={() => setCurrentPage(page)}
                                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${page === safePage
-                                        ? 'bg-indigo-600/30 text-indigo-300'
-                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                                    ? 'bg-indigo-600/30 text-indigo-300'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
                                     }`}
                             >
                                 {page}
@@ -975,6 +976,15 @@ function ObjectivesTab() {
         setEditingObjective(null);
     };
 
+    const handleRevertToDraft = async (objective: Objective) => {
+        try {
+            const { data } = await objectivesApi.updateObjective(objective.id, { status: 'draft' });
+            setObjectives(prev => prev.map(o => o.id === data.id ? data : o));
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to revert objective to draft'));
+        }
+    };
+
     const handleDeleteObjective = async (objective: Objective, force = false) => {
         try {
             await objectivesApi.deleteObjective(objective.id, force);
@@ -1062,6 +1072,7 @@ function ObjectivesTab() {
                                 userMap={userMap}
                                 onEdit={() => setEditingObjective(obj)}
                                 onDelete={() => setDeleteObjectiveConfirm(obj)}
+                                onRevertToDraft={() => handleRevertToDraft(obj)}
                             />
                         ))}
                     </div>
@@ -1107,6 +1118,7 @@ function ObjectivesTab() {
                                 userMap={userMap}
                                 onEdit={() => setEditingObjective(obj)}
                                 onDelete={() => setDeleteObjectiveConfirm(obj)}
+                                onRevertToDraft={() => handleRevertToDraft(obj)}
                             />
                         ))}
                     </div>
@@ -1280,6 +1292,7 @@ function ObjectivesTab() {
                 objective={editingObjective}
                 onClose={() => setEditingObjective(null)}
                 onUpdated={handleObjectiveUpdated}
+                activeCycle={activeCycle ?? undefined}
             />
 
             {/* Delete objective confirmation modal */}
@@ -1318,14 +1331,17 @@ function ObjectivesTab() {
 
 // ── Edit Objective Modal ──────────────────────────────────
 
-function EditObjectiveModal({ isOpen, objective, onClose, onUpdated }: {
+function EditObjectiveModal({ isOpen, objective, onClose, onUpdated, activeCycle }: {
     isOpen: boolean;
     objective: Objective | null;
     onClose: () => void;
     onUpdated: (objective: Objective) => void;
+    activeCycle?: Cycle;
 }) {
     const [editTitle, setEditTitle] = useState('');
     const [editDescription, setEditDescription] = useState('');
+    const [editTargetDateType, setEditTargetDateType] = useState<TargetDateType>('quarterly');
+    const [editTargetDate, setEditTargetDate] = useState('');
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -1333,6 +1349,8 @@ function EditObjectiveModal({ isOpen, objective, onClose, onUpdated }: {
         if (objective) {
             setEditTitle(objective.title);
             setEditDescription(objective.description);
+            setEditTargetDateType(objective.targetDateType ?? 'quarterly');
+            setEditTargetDate(objective.targetDate ?? '');
             setError('');
         }
     }, [objective]);
@@ -1346,6 +1364,8 @@ function EditObjectiveModal({ isOpen, objective, onClose, onUpdated }: {
             const updates: UpdateObjectiveBody = {
                 title: editTitle,
                 description: editDescription,
+                targetDateType: editTargetDateType,
+                targetDate: editTargetDate,
             };
             const { data } = await objectivesApi.updateObjective(objective.id, updates);
             onUpdated(data);
@@ -1383,6 +1403,18 @@ function EditObjectiveModal({ isOpen, objective, onClose, onUpdated }: {
                         className="w-full rounded-lg bg-surface border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none resize-none"
                     />
                 </div>
+                {activeCycle && (
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Target Date</label>
+                        <TargetDatePicker
+                            targetDateType={editTargetDateType}
+                            targetDate={editTargetDate}
+                            onTypeChange={setEditTargetDateType}
+                            onDateChange={setEditTargetDate}
+                            cycle={activeCycle}
+                        />
+                    </div>
+                )}
                 <div className="flex justify-end gap-3 pt-2">
                     <button
                         type="button"
@@ -1406,12 +1438,13 @@ function EditObjectiveModal({ isOpen, objective, onClose, onUpdated }: {
 
 // ── Shared Components ──────────────────────────────────────
 
-function ObjectiveRow({ objective, isCompany, userMap, onEdit, onDelete }: {
+function ObjectiveRow({ objective, isCompany, userMap, onEdit, onDelete, onRevertToDraft }: {
     objective: Objective;
     isCompany?: boolean;
     userMap?: Map<string, User>;
     onEdit: () => void;
     onDelete: () => void;
+    onRevertToDraft: () => void;
 }) {
     const progress = objective.keyResults.length > 0
         ? Math.round(objective.keyResults.reduce((sum, kr) => sum + kr.progress, 0) / objective.keyResults.length)
@@ -1430,15 +1463,15 @@ function ObjectiveRow({ objective, isCompany, userMap, onEdit, onDelete }: {
 
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                    <p className="font-medium text-slate-200 truncate">{objective.title}</p>
+                    <Link to={`/objectives/${objective.id}`} className="font-medium text-slate-200 truncate hover:text-indigo-400 transition-colors">{objective.title}</Link>
                     {isCompany && (
                         <span className="shrink-0 rounded-full bg-amber-500/15 text-amber-400 px-2 py-0.5 text-xs font-medium">
                             Company
                         </span>
                     )}
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${objective.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' :
-                            objective.status === 'completed' ? 'bg-indigo-500/15 text-indigo-400' :
-                                'bg-slate-500/15 text-slate-400'
+                        objective.status === 'completed' ? 'bg-indigo-500/15 text-indigo-400' :
+                            'bg-slate-500/15 text-slate-400'
                         }`}>
                         {objective.status}
                     </span>
@@ -1456,6 +1489,15 @@ function ObjectiveRow({ objective, isCompany, userMap, onEdit, onDelete }: {
 
             {/* Actions */}
             <div className="shrink-0 flex items-center gap-2">
+                {objective.status !== 'draft' && (
+                    <button
+                        onClick={onRevertToDraft}
+                        className="rounded px-2 py-1 text-xs text-amber-400 hover:bg-amber-500/10 transition-colors"
+                        title="Revert to draft to unlock key results for editing"
+                    >
+                        Revert to Draft
+                    </button>
+                )}
                 <button
                     onClick={onEdit}
                     className="rounded px-2 py-1 text-xs text-indigo-400 hover:bg-indigo-500/10 transition-colors"
@@ -1616,8 +1658,8 @@ function CyclesTab() {
                                             <div
                                                 key={q.id ?? q.name}
                                                 className={`rounded-lg border p-3 text-xs ${isCurrentQuarter
-                                                        ? 'border-indigo-500/30 bg-indigo-500/10'
-                                                        : 'border-slate-700/50 bg-surface'
+                                                    ? 'border-indigo-500/30 bg-indigo-500/10'
+                                                    : 'border-slate-700/50 bg-surface'
                                                     }`}
                                             >
                                                 <p className={`font-medium ${isCurrentQuarter ? 'text-indigo-300' : 'text-slate-300'}`}>
@@ -2251,8 +2293,8 @@ function OrgTreeNodeRow({
                 <button
                     onClick={() => hasChildren && onToggle(user.id)}
                     className={`w-5 h-5 flex items-center justify-center rounded text-xs transition-colors ${hasChildren
-                            ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 cursor-pointer'
-                            : 'text-slate-700 cursor-default'
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 cursor-pointer'
+                        : 'text-slate-700 cursor-default'
                         }`}
                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
                     aria-expanded={hasChildren ? isExpanded : undefined}

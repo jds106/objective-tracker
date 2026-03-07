@@ -22,6 +22,10 @@ export function createKeyResultRoutes(deps: RouteDependencies): Router {
         res.status(403).json({ error: 'You do not have permission to add key results to this objective' });
         return;
       }
+      if (objective.status !== 'draft') {
+        res.status(403).json({ error: 'Key results can only be added to objectives in draft status. Revert the objective to draft first.' });
+        return;
+      }
 
       const kr = await deps.keyResultService.create(req.params.objectiveId, req.body);
       res.status(201).json({ data: kr });
@@ -40,6 +44,10 @@ export function createKeyResultRoutes(deps: RouteDependencies): Router {
         res.status(403).json({ error: 'You do not have permission to edit this key result' });
         return;
       }
+      if (objective.status !== 'draft') {
+        res.status(403).json({ error: 'Key results can only be edited when the objective is in draft status. Revert the objective to draft first.' });
+        return;
+      }
 
       const updated = await deps.keyResultService.update(req.params.id, req.body);
       res.json({ data: updated });
@@ -56,6 +64,10 @@ export function createKeyResultRoutes(deps: RouteDependencies): Router {
       const canEdit = await deps.visibilityService.canEdit(req.user!.id, objective.ownerId);
       if (!canEdit) {
         res.status(403).json({ error: 'You do not have permission to delete this key result' });
+        return;
+      }
+      if (objective.status !== 'draft') {
+        res.status(403).json({ error: 'Key results can only be deleted when the objective is in draft status. Revert the objective to draft first.' });
         return;
       }
 

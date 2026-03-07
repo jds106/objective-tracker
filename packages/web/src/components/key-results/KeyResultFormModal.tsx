@@ -52,7 +52,7 @@ export function KeyResultFormModal({
       setError(null);
 
       if (isEdit) {
-        await onSubmit({ title, config } as UpdateKeyResultBody);
+        await onSubmit({ title, type, config } as UpdateKeyResultBody);
       } else {
         await onSubmit({ title, type, config } as CreateKeyResultBody);
       }
@@ -94,27 +94,24 @@ export function KeyResultFormModal({
           />
         </div>
 
-        {!isEdit && (
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Type</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(['percentage', 'metric', 'milestone', 'binary'] as const).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => handleTypeChange(t)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                    type === t
-                      ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
-                      : 'border-slate-600 text-slate-400 hover:border-slate-500'
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Type</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['percentage', 'metric', 'milestone', 'binary'] as const).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => handleTypeChange(t)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${type === t
+                    ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
+                    : 'border-slate-600 text-slate-400 hover:border-slate-500'
                   }`}
-                >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </button>
-              ))}
-            </div>
+              >
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
         <KeyResultConfigForm config={config} onChange={setConfig} />
 

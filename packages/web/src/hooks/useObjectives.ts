@@ -5,8 +5,9 @@ import type {
   UpdateObjectiveBody,
 } from '@objective-tracker/shared';
 import * as objectivesApi from '../services/objectives.api.js';
+import * as adminApi from '../services/admin.api.js';
 
-export function useObjectives(cycleId?: string) {
+export function useObjectives(cycleId?: string, fetchAll = false) {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,14 +16,16 @@ export function useObjectives(cycleId?: string) {
     try {
       setIsLoading(true);
       setError(null);
-      const { data } = await objectivesApi.listMyObjectives(cycleId);
+      const { data } = fetchAll
+        ? await adminApi.getAllObjectives(cycleId)
+        : await objectivesApi.listMyObjectives(cycleId);
       setObjectives(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load objectives');
     } finally {
       setIsLoading(false);
     }
-  }, [cycleId]);
+  }, [cycleId, fetchAll]);
 
   useEffect(() => { loadObjectives(); }, [loadObjectives]);
 

@@ -91,18 +91,18 @@ export function KeyResultList({ keyResults, onCheckIn, onEdit, onDelete, canEdit
               </span>
             </div>
 
-            {(canEdit || kr.checkIns.length > 0) && (
+            {(canEdit || onCheckIn || kr.checkIns.length > 0) && (
               <div className="mt-3 flex items-center gap-2">
+                {onCheckIn && (
+                  <button
+                    onClick={() => onCheckIn(kr)}
+                    className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
+                  >
+                    Check in
+                  </button>
+                )}
                 {canEdit && (
                   <>
-                    {onCheckIn && (
-                      <button
-                        onClick={() => onCheckIn(kr)}
-                        className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
-                      >
-                        Check in
-                      </button>
-                    )}
                     {onEdit && (
                       <button
                         onClick={() => onEdit(kr)}

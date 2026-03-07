@@ -63,7 +63,7 @@ export function ObjectiveDetailPage() {
     if (!id) return;
     cascadeApi.getObjectiveCascadePath(id)
       .then(({ data }) => setCascadePath(data))
-      .catch(() => {});
+      .catch(() => { });
   }, [id]);
 
   if (!id) {
@@ -94,6 +94,7 @@ export function ObjectiveDetailPage() {
   }
 
   const progress = calculateObjectiveProgress(objective.keyResults.map(kr => kr.progress));
+  const isDraft = objective.status === 'draft';
   const allCheckIns = objective.keyResults.flatMap(kr => kr.checkIns);
   const health = calculateHealthStatus(progress, selectedCycle, allCheckIns, {
     targetDate: objective.targetDate,
@@ -381,11 +382,10 @@ export function ObjectiveDetailPage() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-purple-300">✦ AI Quality Review</h3>
             <div className="flex items-center gap-2">
-              <span className={`text-lg font-bold ${
-                aiReview.score >= 8 ? 'text-emerald-400' :
+              <span className={`text-lg font-bold ${aiReview.score >= 8 ? 'text-emerald-400' :
                 aiReview.score >= 5 ? 'text-amber-400' :
-                'text-red-400'
-              }`}>
+                  'text-red-400'
+                }`}>
                 {aiReview.score}/10
               </span>
               <button
@@ -437,7 +437,7 @@ export function ObjectiveDetailPage() {
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-100">Key Results</h3>
-          {canEdit && (
+          {canEdit && isDraft && (
             <button
               onClick={() => setShowAddKR(true)}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
@@ -448,10 +448,10 @@ export function ObjectiveDetailPage() {
         </div>
         <KeyResultList
           keyResults={objective.keyResults}
-          canEdit={canEdit}
-          onCheckIn={kr => setCheckInKR(kr)}
-          onEdit={kr => setEditingKR(kr)}
-          onDelete={kr => setConfirmDeleteKR(kr)}
+          canEdit={canEdit && isDraft}
+          onCheckIn={canEdit ? (kr => setCheckInKR(kr)) : undefined}
+          onEdit={isDraft ? (kr => setEditingKR(kr)) : undefined}
+          onDelete={isDraft ? (kr => setConfirmDeleteKR(kr)) : undefined}
         />
       </div>
 
@@ -552,7 +552,7 @@ export function ObjectiveDetailPage() {
         onClose={() => setConfirmActivate(false)}
         onConfirm={handleActivate}
         title="Activate Objective"
-        message="Activating will lock this objective for editing. You can still manage key results and record check-ins. Continue?"
+        message="Activating will lock key results — you won't be able to add, edit, or remove them. You can still record check-ins. Continue?"
         confirmLabel="Activate"
         isLoading={activateLoading}
       />

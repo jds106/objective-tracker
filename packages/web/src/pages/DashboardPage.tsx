@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ExclamationCircleIcon, CheckCircleIcon, QueueListIcon, BellAlertIcon } from '@heroicons/react/24/outline';
+import { ExclamationCircleIcon, CheckCircleIcon, QueueListIcon, BellAlertIcon, PlusIcon } from '@heroicons/react/24/outline';
 import type { KeyResult, Objective } from '@objective-tracker/shared';
 import { calculateObjectiveProgress, calculateHealthStatus, formatDate, formatRelativeTime, type HealthStatus } from '@objective-tracker/shared';
 import { useAuth } from '../contexts/auth.context.js';
@@ -9,7 +9,7 @@ import { useObjectives } from '../hooks/useObjectives.js';
 import { StatCards } from '../components/dashboard/StatCards.js';
 import { ObjectiveCard } from '../components/dashboard/ObjectiveCard.js';
 import { RecentActivity } from '../components/dashboard/RecentActivity.js';
-import { CreateObjectiveButton } from '../components/dashboard/CreateObjectiveButton.js';
+
 import { StatusBadge } from '../components/StatusBadge.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorAlert } from '../components/ErrorAlert.js';
@@ -23,7 +23,7 @@ const CLOSED_STATUSES = new Set(['completed', 'cancelled', 'rolled_forward']);
 export function DashboardPage() {
   const { user, isAdmin } = useAuth();
   const { activeCycle, selectedCycle, isHistorical } = useCycle();
-  const { objectives, isLoading, error, refetch } = useObjectives(selectedCycle?.id);
+  const { objectives, isLoading, error, refetch } = useObjectives(selectedCycle?.id, isAdmin);
   const [sortBy, setSortBy] = useState<SortBy>('target_date');
 
   const activeObjectives = useMemo(
@@ -93,20 +93,33 @@ export function DashboardPage() {
 
   return (
     <PageTransition>
-      <h2 className="text-3xl font-bold tracking-tight text-slate-100">
-        Welcome back, {user?.displayName}
-      </h2>
-      <p className="mt-1 text-slate-400">
-        {selectedCycle
-          ? (selectedCycle.quarters.find(q => {
-              const now = new Date();
-              return now >= new Date(q.startDate) && now <= new Date(q.endDate);
-            })?.name ?? selectedCycle.name)
-          : 'No active cycle'}
-        {isHistorical && (
-          <span className="ml-2 text-xs text-amber-400">(viewing historical cycle)</span>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-100">
+            Welcome back, {user?.displayName}
+          </h2>
+          <p className="mt-1 text-slate-400">
+            {selectedCycle
+              ? (selectedCycle.quarters.find(q => {
+                const now = new Date();
+                return now >= new Date(q.startDate) && now <= new Date(q.endDate);
+              })?.name ?? selectedCycle.name)
+              : 'No active cycle'}
+            {isHistorical && (
+              <span className="ml-2 text-xs text-amber-400">(viewing historical cycle)</span>
+            )}
+          </p>
+        </div>
+        {!isHistorical && !isAdmin && activeCycle && (
+          <Link
+            to="/objectives/new"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors shrink-0"
+          >
+            <PlusIcon className="h-4 w-4" />
+            New Objective
+          </Link>
         )}
-      </p>
+      </div>
 
       {error && (
         <ErrorAlert
@@ -134,7 +147,7 @@ export function DashboardPage() {
       )}
 
       <div className="mt-6">
-        <StatCards objectives={objectives} />
+        <StatCards objectives={objectives} isAdmin={isAdmin} />
       </div>
 
       {/* Stale KR nudges */}
@@ -170,7 +183,7 @@ export function DashboardPage() {
 
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-100">My Objectives</h3>
+          <h3 className="text-lg font-semibold text-slate-100">{isAdmin ? 'All Objectives' : 'My Objectives'}</h3>
           <div className="flex items-center gap-3">
             {activeObjectives.length > 1 && (
               <select
@@ -228,7 +241,7 @@ export function DashboardPage() {
                 {sortedObjectives.map(obj => (
                   <ObjectiveCard key={obj.id} objective={obj} />
                 ))}
-                {!isHistorical && !isAdmin && activeCycle && <CreateObjectiveButton />}
+
               </div>
             )}
           </>

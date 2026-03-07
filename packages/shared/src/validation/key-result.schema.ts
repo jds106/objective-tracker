@@ -48,8 +48,12 @@ export const createKeyResultSchema = z.object({
 
 export const updateKeyResultSchema = z.object({
   title: z.string().min(1).max(200).optional(),
+  type: z.enum(['percentage', 'metric', 'milestone', 'binary']).optional(),
   config: keyResultConfigSchema.optional(),
-});
+}).refine(
+  (data) => !data.type || !data.config || data.type === data.config.type,
+  { message: 'Key result type must match config type', path: ['config', 'type'] },
+);
 
 export const checkInSchema = z.object({
   note: z.string().max(1000).optional(),
